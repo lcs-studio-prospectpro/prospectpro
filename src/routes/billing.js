@@ -2,7 +2,7 @@ const express = require('express');
 const Stripe = require('stripe');
 const prisma = require('../lib/prisma');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { PLANS, isSalesAssisted } = require('../lib/plans');
+const { PLANS, isSalesAssisted, territoryAddOnConfig, effectiveTerritoryLimit, territoryLimit } = require('../lib/plans');
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -67,6 +67,33 @@ router.post('/contact-sales', requireAuth, requireRole('owner'), async (req, res
   res.json({ received: true, message: 'Thanks — our team will reach out shortly to set up your Enterprise plan.' });
 });
 
+// POST /api/billing/territories/set — buy or remove à la carte extra territory slots on the
+// tenant's current plan (same features, just more coverage). No tier change, no Stripe checkout
+// yet (mirrors /contact-sales for now — flips the DB count directly; wire to a Stripe metered
+// line item once real Price IDs exist). Not available on unlimited-territory plans.
+router.post('/territories/set', requireAuth, requireRole('owner'), async (req, res) => {
+  const { count } = req.body;
+  const tenant = await prisma.tenant.findUnique({ where: { id: req.user.tenantId } });
+  const addOnConfig = territoryAddOnConfig(tenant.plan);
+  if (!addOnConfig) {
+    return res.status(400).json({ error: 'Your current plan does not use territory add-ons (either unlimited territories already, or sales-assisted/trial).' });
+  }
+  const desired = parseInt(count, 10);
+  if (!Number.isFinite(desired) || desired < 0) return res.status(400).json({ error: 'count must be a non-negative number' });
+  if (desired > addOnConfig.maxAddOns) {
+    return res.status(400).json({ error: `You can add up to ${addOnConfig.maxAddOns} extra territories on this plan. For more, upgrade tiers.` });
+  }
+  const updated = await prisma.tenant.update({ where: { id: tenant.id }, data: { extraTerritories: desired } });
+  res.json({
+    extraTerritories: updated.extraTerritories,
+    baseTerritories: territoryLimit(updated.plan),
+    effectiveTerritoryLimit: effectiveTerritoryLimit(updated),
+    monthlyAddOnCost: desired * addOnConfig.price,
+    pricePerTerritory: addOnConfig.price,
+    maxAddOns: addOnConfig.maxAddOns,
+  });
+});
+
 // POST /api/billing/webhook — Stripe calls this on subscription events (must use raw body — see server.js)
 router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   let event;
@@ -104,9 +131,14 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 // GET /api/billing/status
 router.get('/status', requireAuth, async (req, res) => {
   const tenant = await prisma.tenant.findUnique({ where: { id: req.user.tenantId } });
+  const addOnConfig = territoryAddOnConfig(tenant.plan);
   res.json({
     plan: tenant.plan, subscriptionStatus: tenant.subscriptionStatus, trialEndsAt: tenant.trialEndsAt,
     trialDaysLeft: tenant.trialEndsAt ? Math.max(0, Math.ceil((tenant.trialEndsAt - new Date()) / 86400000)) : null,
+    baseTerritories: territoryLimit(tenant.plan),
+    extraTerritories: tenant.extraTerritories || 0,
+    effectiveTerritoryLimit: effectiveTerritoryLimit(tenant),
+    territoryAddOn: addOnConfig, // null if this plan doesn't support add-ons (unlimited / sales-assisted / trial)
   });
 });
 

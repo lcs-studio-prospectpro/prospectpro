@@ -1,7 +1,7 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { territoryLimit } = require('../lib/plans');
+const { effectiveTerritoryLimit } = require('../lib/plans');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -26,7 +26,7 @@ router.post('/', requireRole('admin'), async (req, res) => {
   if (!label || !categoryCode) return res.status(400).json({ error: 'label and categoryCode are required' });
 
   const tenant = await prisma.tenant.findUnique({ where: { id: req.user.tenantId } });
-  const limit = territoryLimit(tenant.plan);
+  const limit = effectiveTerritoryLimit(tenant);
   if (limit !== null) {
     const count = await prisma.vertical.count({ where: { tenantId: req.user.tenantId } });
     if (count >= limit) {

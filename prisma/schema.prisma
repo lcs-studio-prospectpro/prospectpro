@@ -21,6 +21,7 @@ model Tenant {
   stripeSubId       String?
   subscriptionStatus String   @default("trialing") // trialing | active | past_due | canceled
   trialEndsAt       DateTime?
+  extraTerritories  Int       @default(0) // à la carte add-on: extra territory slots purchased on top of the plan's base allotment
   createdAt         DateTime  @default(now())
 
   users         User[]

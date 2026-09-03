@@ -28,6 +28,7 @@ const PLANS = {
       'Call logging & follow-ups',
       'CSV import/export',
     ],
+    territoryAddOn: { price: 8, maxAddOns: 4 }, // +$8/mo per extra territory, up to 4 extra
   },
   smallbiz: {
     key: 'smallbiz',
@@ -46,6 +47,7 @@ const PLANS = {
       'Everything in Intro',
       'Bi-directional CRM sync (GoHighLevel, HubSpot, Pipedrive)',
     ],
+    territoryAddOn: { price: 6, maxAddOns: 10 }, // +$6/mo per extra territory, up to 10 extra
   },
   pro: {
     key: 'pro',
@@ -131,6 +133,7 @@ const PLANS = {
       'Call logging & follow-ups',
       'CSV import/export',
     ],
+    territoryAddOn: { price: 5, maxAddOns: 4 }, // +$5/mo per extra territory, up to 4 extra
   },
   desktop_plus: {
     key: 'desktop_plus',
@@ -149,6 +152,7 @@ const PLANS = {
       'Route planning with map view',
       'Bi-directional CRM sync (1 provider)',
     ],
+    territoryAddOn: { price: 6, maxAddOns: 5 }, // +$6/mo per extra territory, up to 5 extra
   },
   desktop_pro: {
     key: 'desktop_pro',
@@ -167,6 +171,7 @@ const PLANS = {
       'Bi-directional CRM sync, all supported providers',
       'Priority support',
     ],
+    territoryAddOn: { price: 4, maxAddOns: 10 }, // +$4/mo per extra territory, up to 10 extra
   },
 
   // ───────────────────────── MOBILE APP (per-user license, field-rep focused) ─────────────────────────
@@ -187,6 +192,7 @@ const PLANS = {
       'Offline mode for spotty coverage',
       'Click-to-call & call logging',
     ],
+    territoryAddOn: { price: 6, maxAddOns: 4 }, // +$6/mo per extra territory, up to 4 extra
   },
   mobile_plus: {
     key: 'mobile_plus',
@@ -205,6 +211,7 @@ const PLANS = {
       'GPS-based route optimization',
       'Bi-directional CRM sync (1 provider)',
     ],
+    territoryAddOn: { price: 7, maxAddOns: 5 }, // +$7/mo per extra territory, up to 5 extra
   },
   mobile_pro: {
     key: 'mobile_pro',
@@ -224,6 +231,7 @@ const PLANS = {
       'Team location check-ins',
       'Priority support',
     ],
+    territoryAddOn: { price: 5, maxAddOns: 10 }, // +$5/mo per extra territory, up to 10 extra
   },
 };
 
@@ -277,6 +285,25 @@ async function effectiveSeatLimit(tenant, prisma) {
   return seatLimit(tenant.plan);
 }
 
+// À la carte territory add-on — lets a tenant buy extra territory slots within their current
+// tier (same features, just more coverage) instead of jumping a whole tier. Deliberately capped
+// per plan (maxAddOns) so heavy users still eventually upgrade rather than stacking forever.
+// Not offered on unlimited-territory plans (Professional, Enterprise, Enterprise Key) or trial.
+function territoryAddOnConfig(planKey) {
+  const plan = getPlan(planKey);
+  return (plan && plan.territoryAddOn) || null;
+}
+
+// A tenant's real territory ceiling = plan base allotment + purchased add-on slots (capped).
+function effectiveTerritoryLimit(tenant) {
+  const base = territoryLimit(tenant.plan);
+  if (base === null) return null; // already unlimited
+  const addOnConfig = territoryAddOnConfig(tenant.plan);
+  if (!addOnConfig) return base;
+  const purchased = Math.min(tenant.extraTerritories || 0, addOnConfig.maxAddOns);
+  return base + purchased;
+}
+
 function usesRegistrationKeys(planKey) {
   const plan = getPlan(planKey);
   return !!(plan && plan.usesRegistrationKeys);
@@ -295,6 +322,8 @@ module.exports = {
   seatLimit,
   effectiveSeatLimit,
   territoryLimit,
+  territoryAddOnConfig,
+  effectiveTerritoryLimit,
   crmSyncAllowed,
   usesRegistrationKeys,
   isSalesAssisted,

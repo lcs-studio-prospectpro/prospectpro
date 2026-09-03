@@ -586,7 +586,7 @@ function billingPlanCard(p, status) {
       <p style="font-size:12px;color:var(--mute);min-height:32px">${p.tagline}</p>
       <ul style="font-size:12px;color:var(--mute);padding-left:18px;flex:1">
         <li>${seats}</li>
-        <li>${territories}</li>
+        <li>${territories}${p.territoryAddOn ? ` <span style="color:var(--gold)">(+${p.territoryAddOn.maxAddOns} more @ $${p.territoryAddOn.price}/mo ea.)</span>` : ''}</li>
         ${p.features.slice(2).map(f => `<li>${f}</li>`).join('')}
       </ul>
       ${button}
@@ -609,19 +609,72 @@ async function renderBillingView() {
     </div>`).join('');
 
   const licenseKeyPanel = status.plan === 'enterprise_key' ? await renderLicenseKeyPanelHtml() : '';
+  const territoryAddOnPanel = status.territoryAddOn ? renderTerritoryAddOnPanelHtml(status) : '';
 
   content.innerHTML = `
     <div class="stat-row">
       <div class="stat-box"><div class="n">${status.plan}</div><div class="l">Current Plan</div></div>
       <div class="stat-box"><div class="n">${status.subscriptionStatus}</div><div class="l">Status</div></div>
       ${status.trialDaysLeft !== null ? `<div class="stat-box"><div class="n">${status.trialDaysLeft}</div><div class="l">Trial Days Left</div></div>` : ''}
+      <div class="stat-box"><div class="n">${status.effectiveTerritoryLimit === null ? '∞' : status.effectiveTerritoryLimit}</div><div class="l">Territories Available</div></div>
     </div>
     <p style="font-size:11px;color:var(--mute);margin-top:12px;max-width:640px">Priced below comparable prospecting/CRM tools (e.g. Close from $19&#8211;49/seat/mo, Apollo from $49/seat/mo, GoHighLevel from $97&#8211;497/mo) while still including bi-directional CRM sync at the Small Business tier. Enterprise tiers (30+ users) are volume-quoted and sales-assisted.</p>
     ${groupsHtml}
     <div id="contactSalesFormWrap" style="margin-top:20px"></div>
     <div id="billingMsg" style="margin-top:14px;font-size:12px;color:var(--mute)"></div>
+    ${territoryAddOnPanel}
     ${licenseKeyPanel}
     ${renderLegalContactPanel()}`;
+}
+
+// ── À LA CARTE TERRITORY ADD-ONS ──
+// Lets a tenant on a capped (non-unlimited) plan buy extra territory slots at a flat per-territory
+// price, same features, no tier jump. Not shown for Professional/Enterprise/Enterprise Key/trial
+// since those already include unlimited or very high territory counts.
+function renderTerritoryAddOnPanelHtml(status) {
+  const cfg = status.territoryAddOn;
+  const extra = status.extraTerritories || 0;
+  const cost = extra * cfg.price;
+  const options = [];
+  for (let i = 0; i <= cfg.maxAddOns; i++) options.push(i);
+  return `
+    <div class="card" style="margin-top:20px;max-width:520px">
+      <h3 style="margin-top:0">Add More Territories</h3>
+      <p style="font-size:12px;color:var(--mute)">Same plan, same features — just more coverage. $${cfg.price}/mo per extra territory (each is one county or one zip+radius area), up to ${cfg.maxAddOns} extra on your current plan. Need more than that? Upgrade tiers instead.</p>
+      <div style="display:flex;align-items:center;gap:10px;margin:12px 0">
+        <label style="font-size:12px">Extra territories
+          <select id="territoryAddOnCount" style="display:block;width:100px;margin-top:4px" onchange="previewTerritoryAddOn(${status.baseTerritories}, ${cfg.price})">
+            ${options.map(n => `<option value="${n}" ${n === extra ? 'selected' : ''}>${n}</option>`).join('')}
+          </select>
+        </label>
+        <div style="font-size:13px;color:var(--mute);margin-top:14px">
+          Base: ${status.baseTerritories} + <span id="addOnPreview">${extra}</span> extra = <b><span id="totalPreview">${status.baseTerritories + extra}</span> territories</b>
+          &middot; +$<span id="costPreview">${cost}</span>/mo
+        </div>
+      </div>
+      <button class="btn primary" onclick="setTerritoryAddOns()">Update</button>
+      <div id="territoryAddOnMsg" style="margin-top:10px;font-size:12px;color:var(--mute)"></div>
+    </div>`;
+}
+
+function previewTerritoryAddOn(base, pricePerTerritory) {
+  const n = parseInt(document.getElementById('territoryAddOnCount').value, 10) || 0;
+  document.getElementById('addOnPreview').textContent = n;
+  document.getElementById('totalPreview').textContent = base + n;
+  document.getElementById('costPreview').textContent = n * pricePerTerritory;
+}
+
+async function setTerritoryAddOns() {
+  const msg = document.getElementById('territoryAddOnMsg');
+  const count = parseInt(document.getElementById('territoryAddOnCount').value, 10);
+  msg.textContent = 'Updating...';
+  try {
+    const res = await api('/billing/territories/set', { method: 'POST', body: { count } });
+    msg.textContent = `✓ You now have ${res.effectiveTerritoryLimit} territories total (+$${res.monthlyAddOnCost}/mo).`;
+    renderBillingView();
+  } catch (e) {
+    msg.textContent = '⚠ ' + e.message;
+  }
 }
 
 function showContactSalesForm(planKey) {
