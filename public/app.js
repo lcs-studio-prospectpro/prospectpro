@@ -7,8 +7,11 @@ let state = {
   selectedVerticalId: null,
   contacts: [],
   tasks: [],
-  currentView: 'contacts',
+  currentView: 'search',
 };
+
+const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
+const RADIUS_OPTIONS = [5, 10, 15, 20, 25, 50, 75, 100, 150, 200, 300, 500];
 
 // ── API helper ──
 async function api(path, opts = {}) {
@@ -79,7 +82,7 @@ async function boot() {
 
   await loadVerticals();
   await loadBillingStatus();
-  switchView('contacts');
+  switchView('search');
 }
 
 async function loadBillingStatus() {
@@ -104,8 +107,9 @@ function switchView(view) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));
   document.getElementById('addContactBtn').classList.toggle('hidden', view !== 'contacts');
   document.getElementById('importContactsBtn').classList.toggle('hidden', view !== 'contacts');
-  const titles = { contacts: 'Contacts', tasks: 'VA Task Queue', leaderboard: 'Team Leaderboard', verticals: 'Verticals & Categories', billing: 'Billing & Plan' };
+  const titles = { search: 'Search', contacts: 'Contacts', tasks: 'VA Task Queue', leaderboard: 'Team Leaderboard', verticals: 'Verticals & Categories', billing: 'Billing & Plan' };
   document.getElementById('viewTitle').textContent = titles[view];
+  if (view === 'search') renderSearchView();
   if (view === 'contacts') renderContactsView();
   if (view === 'tasks') renderTasksView();
   if (view === 'leaderboard') renderLeaderboardView();
@@ -113,10 +117,124 @@ function switchView(view) {
   if (view === 'billing') renderBillingView();
 }
 
+// ── SEARCH (start page) ──
+// Haversine distance in miles between two lat/lng points.
+function distanceMiles(lat1, lng1, lat2, lng2) {
+  if ([lat1, lng1, lat2, lng2].some(v => v === null || v === undefined)) return null;
+  const R = 3958.8;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// Free, no-key US zip lookup — returns { lat, lng, city, state } or null.
+async function geocodeZip(zip) {
+  try {
+    const res = await fetch('https://api.zippopotam.us/us/' + encodeURIComponent(zip));
+    if (!res.ok) return null;
+    const data = await res.json();
+    const place = data.places && data.places[0];
+    if (!place) return null;
+    return { lat: parseFloat(place.latitude), lng: parseFloat(place.longitude), city: place['place name'], state: place['state abbreviation'] };
+  } catch (e) { return null; }
+}
+
+function renderSearchView() {
+  const content = document.getElementById('content');
+  const v = state.verticals.find(v => v.id === state.selectedVerticalId);
+  content.innerHTML = `
+    <div class="banner">Start here every time you begin prospecting: pick the category of business you're targeting and the region to search. This becomes your active territory in Contacts.</div>
+    <div class="card" style="max-width:520px">
+      <div class="field">
+        <label>Category of business</label>
+        <select id="s_vertical" class="select" style="width:100%">
+          ${state.verticals.map(x => `<option value="${x.id}" ${x.id === state.selectedVerticalId ? 'selected' : ''}>${x.label}</option>`).join('')}
+          <option value="__new__">+ Create new category…</option>
+        </select>
+      </div>
+      <div id="s_new_wrap" class="${state.verticals.length ? 'hidden' : ''}" style="display:flex;gap:8px;margin-bottom:14px">
+        <input id="s_new_label" placeholder="Category name (e.g. Interior Designers)" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+        <input id="s_new_code" placeholder="Tag code (e.g. INT)" style="width:100px;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+      </div>
+      <div class="field">
+        <label>State</label>
+        <select id="s_state" class="select" style="width:100%">
+          <option value="">Select a state</option>
+          ${US_STATES.map(s => `<option value="${s}" ${v?.targetState === s ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>City</label><input id="s_city" placeholder="e.g. Tampa" value="${v?.targetCity || ''}"></div>
+      <div class="field"><label>Zip code</label><input id="s_zip" placeholder="e.g. 33602" value="${v?.targetZip || ''}"></div>
+      <div class="field">
+        <label>Search radius</label>
+        <select id="s_radius" class="select" style="width:100%">
+          ${RADIUS_OPTIONS.map(r => `<option value="${r}" ${(v?.radiusMiles || 25) === r ? 'selected' : ''}>${r} mile radius</option>`).join('')}
+        </select>
+      </div>
+      <div id="s_error" class="auth-error hidden"></div>
+      <button class="btn primary" onclick="runSearch()">🔍 Search This Territory</button>
+    </div>`;
+
+  document.getElementById('s_vertical').addEventListener('change', (e) => {
+    document.getElementById('s_new_wrap').classList.toggle('hidden', e.target.value !== '__new__');
+  });
+}
+
+async function runSearch() {
+  const errEl = document.getElementById('s_error');
+  errEl.classList.add('hidden');
+
+  const vertSel = document.getElementById('s_vertical').value;
+  const state_ = document.getElementById('s_state').value;
+  const city = document.getElementById('s_city').value.trim();
+  const zip = document.getElementById('s_zip').value.trim();
+  const radiusMiles = parseInt(document.getElementById('s_radius').value);
+
+  if (!vertSel || !state_ || !city || !zip) {
+    errEl.textContent = 'Category, state, city, and zip are all required to search.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  let verticalId = vertSel;
+  try {
+    if (vertSel === '__new__') {
+      const label = document.getElementById('s_new_label').value.trim();
+      const categoryCode = document.getElementById('s_new_code').value.trim();
+      if (!label || !categoryCode) { errEl.textContent = 'Enter a name and tag code for the new category.'; errEl.classList.remove('hidden'); return; }
+      const created = await api('/verticals', { method: 'POST', body: { label, categoryCode } });
+      verticalId = created.id;
+    }
+
+    const geo = await geocodeZip(zip);
+    await api('/verticals/' + verticalId, {
+      method: 'PATCH',
+      body: {
+        targetState: state_, targetCity: city, targetZip: zip, radiusMiles,
+        targetLat: geo?.lat ?? null, targetLng: geo?.lng ?? null,
+      },
+    });
+
+    await loadVerticals();
+    state.selectedVerticalId = verticalId;
+    switchView('contacts');
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.classList.remove('hidden');
+  }
+}
+
 // ── CONTACTS VIEW ──
 async function renderContactsView() {
   const content = document.getElementById('content');
+  const v = state.verticals.find(v => v.id === state.selectedVerticalId);
+  const searchBanner = v && v.targetState
+    ? `<div class="banner">🔍 Active territory: <b>${v.label}</b> in ${v.targetCity}, ${v.targetState} ${v.targetZip} · ${v.radiusMiles} mile radius
+        <span class="btn link" style="padding:0 0 0 8px" onclick="switchView('search')">Edit search</span></div>`
+    : `<div class="banner">No search territory set for this category yet. <span class="btn link" style="padding:0 0 0 4px" onclick="switchView('search')">Set one up</span></div>`;
   content.innerHTML = `
+    ${searchBanner}
     <div class="toolbar" id="verticalChips"></div>
     <div class="grid" id="contactsGrid"><div class="empty">Loading…</div></div>
   `;
@@ -136,8 +254,7 @@ function renderVerticalChips() {
 
 async function selectVertical(id) {
   state.selectedVerticalId = id;
-  renderVerticalChips();
-  await loadContactsForSelectedVertical();
+  await renderContactsView();
 }
 
 async function loadContactsForSelectedVertical() {
@@ -145,11 +262,30 @@ async function loadContactsForSelectedVertical() {
   if (!state.selectedVerticalId) { grid.innerHTML = '<div class="empty">Create a vertical first.</div>'; return; }
   state.contacts = await api('/contacts?verticalId=' + state.selectedVerticalId);
   if (!state.contacts.length) { grid.innerHTML = '<div class="empty">No contacts yet in this vertical. Click "+ Add Contact" to start.</div>'; return; }
-  grid.innerHTML = state.contacts.map(contactCardHTML).join('');
+
+  const v = state.verticals.find(v => v.id === state.selectedVerticalId);
+  // Attach distance from the active search territory, if both the territory and the contact are geocoded.
+  const withDistance = state.contacts.map(c => ({
+    ...c,
+    _distance: (v?.targetLat != null && c.lat != null) ? distanceMiles(v.targetLat, v.targetLng, c.lat, c.lng) : null,
+  }));
+  // Contacts within radius (or without coordinates, so nothing is hidden) sort first, closest first.
+  withDistance.sort((a, b) => {
+    if (a._distance == null && b._distance == null) return 0;
+    if (a._distance == null) return 1;
+    if (b._distance == null) return -1;
+    return a._distance - b._distance;
+  });
+  state.contacts = withDistance;
+  grid.innerHTML = withDistance.map(c => contactCardHTML(c, v)).join('');
 }
 
-function contactCardHTML(c) {
+function contactCardHTML(c, v) {
   const phoneOk = !!c.phone, emailOk = !!c.email, addrOk = !!c.address;
+  const inRadius = v && c._distance != null ? c._distance <= v.radiusMiles : null;
+  const distanceTag = c._distance != null
+    ? `<div class="tag" style="background:${inRadius ? '#eafaf0' : '#fef2f2'};color:${inRadius ? 'var(--green)' : 'var(--red)'}">${c._distance.toFixed(1)} mi ${inRadius ? '· in radius' : '· outside radius'}</div>`
+    : '';
   return `
   <div class="card contact-card tier-${c.tier}">
     <div class="dot-row">
@@ -162,6 +298,7 @@ function contactCardHTML(c) {
     <div class="contact-meta">${c.address || 'No address on file'}</div>
     <div class="contact-meta">${c.phone || '—'} · ${c.email || '—'}</div>
     <div class="tag">${c.categoryId || 'uncategorized'}</div>
+    ${distanceTag}
     ${c.dataConfirmed
       ? `<div class="badge-confirmed">✓ Confirmed</div><button class="btn" style="margin-top:8px;font-size:11px" onclick="openCallLogModal('${c.id}')">📞 Log Call</button>`
       : `<div class="confirm-row"><button class="btn" style="font-size:11px" onclick="confirmContact('${c.id}')">✓ Confirm data</button></div>`

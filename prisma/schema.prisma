@@ -62,6 +62,12 @@ model Vertical {
   archived    Boolean  @default(false)
   callScript  String?  // suggested call opener/talking points for this vertical
   emailScript String?  // suggested intro email template for this vertical
+  targetState String?  // search region — 2-letter state code, e.g. "FL"
+  targetCity  String?  // search region — city name
+  targetZip   String?  // search region — zip code
+  radiusMiles Int      @default(25) // search radius around the region
+  targetLat   Float?   // geocoded center point of the search region (from zip)
+  targetLng   Float?
   createdAt   DateTime @default(now())
 
   contacts Contact[]
