@@ -407,7 +407,23 @@ async function renderBillingView() {
       <div class="card"><h3>Pro — $99/mo</h3><p style="font-size:12px;color:var(--mute)">15 seats, unlimited territories, CRM sync</p>
         <button class="btn primary" onclick="checkout('pro')">Upgrade to Pro</button></div>
     </div>
-    <div id="billingMsg" style="margin-top:14px;font-size:12px;color:var(--mute)"></div>`;
+    <div id="billingMsg" style="margin-top:14px;font-size:12px;color:var(--mute)"></div>
+    ${renderLegalContactPanel()}`;
+}
+
+// Owner/admin-only legal & contact info — never shown outside this admin-facing panel.
+function renderLegalContactPanel() {
+  const role = (state.user && state.user.role) || '';
+  if (role !== 'owner' && role !== 'admin') return '';
+  return `
+    <div class="card" style="margin-top:20px;max-width:420px">
+      <h3 style="margin-top:0;font-size:13px">Legal &amp; Contact (admin only)</h3>
+      <div style="font-size:12px;color:var(--mute);line-height:1.6">
+        Support inbox: <a href="mailto:prospectprosupport@gmail.com">prospectprosupport@gmail.com</a><br>
+        Operated by: Lighting + Controls Solutions LLC<br>
+        Billing contact: Studio@LCS-Studio.com
+      </div>
+    </div>`;
 }
 
 async function checkout(plan) {

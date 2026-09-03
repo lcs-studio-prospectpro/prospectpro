@@ -10,6 +10,7 @@ const callLogsRoutes = require('./routes/callLogs');
 const vaTasksRoutes = require('./routes/vaTasks');
 const billingRoutes = require('./routes/billing');
 const reportsRoutes = require('./routes/reports');
+const tenantRoutes = require('./routes/tenant');
 
 const app = express();
 
@@ -29,6 +30,7 @@ app.use('/api/call-logs', callLogsRoutes);
 app.use('/api/va-tasks', vaTasksRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/tenant', tenantRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
