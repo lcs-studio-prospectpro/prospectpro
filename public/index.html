@@ -26,8 +26,11 @@
   .field input:focus{outline:none;border-color:var(--navy)}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text)}
   .btn:hover{background:#f4f4f4}
-  .btn.primary{background:var(--gold);border-color:var(--gold-dark);color:#3a2f0d;width:100%;padding:11px}
-  .btn.primary:hover{background:#c9a02f}
+  .btn:disabled{opacity:.6;cursor:default}
+  .btn:disabled:hover{background:#fff}
+  .btn.primary{background:var(--navy);border-color:var(--navy);color:#fff;width:100%;padding:11px}
+  .btn.primary:hover{background:var(--navy-dark)}
+  .btn.primary:disabled{background:#aab6c2;border-color:#aab6c2;color:#fff;cursor:default}
   .btn.link{border:none;background:none;color:var(--navy);text-decoration:underline;padding:4px}
   .auth-toggle{text-align:center;margin-top:14px;font-size:12px;color:var(--mute)}
   .auth-error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:14px}
