@@ -558,7 +558,7 @@ function renderLegalContactPanel() {
     <div class="card" style="margin-top:20px;max-width:420px">
       <h3 style="margin-top:0;font-size:13px">Legal &amp; Contact (admin only)</h3>
       <div style="font-size:12px;color:var(--mute);line-height:1.6">
-        Support inbox: <a href="mailto:prospectprosupport@gmail.com">prospectprosupport@gmail.com</a><br>
+        Support inbox: <a href="mailto:prospectpro@lcs-studio.com">prospectpro@lcs-studio.com</a><br>
         Operated by: Lighting + Controls Solutions LLC<br>
         Billing contact: Studio@LCS-Studio.com
       </div>
