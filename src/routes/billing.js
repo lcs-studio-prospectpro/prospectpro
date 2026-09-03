@@ -2,7 +2,7 @@ const express = require('express');
 const Stripe = require('stripe');
 const prisma = require('../lib/prisma');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { PLANS } = require('../lib/plans');
+const { PLANS, isSalesAssisted } = require('../lib/plans');
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -14,9 +14,12 @@ router.get('/plans', (req, res) => {
 
 // POST /api/billing/checkout — owner starts a Stripe Checkout session to upgrade off the trial
 router.post('/checkout', requireAuth, requireRole('owner'), async (req, res) => {
-  const { plan } = req.body; // 'intro' | 'smallbiz' | 'pro'
+  const { plan } = req.body;
   const planConfig = PLANS[plan];
   if (!planConfig) return res.status(400).json({ error: 'Unknown plan' });
+  if (isSalesAssisted(plan)) {
+    return res.status(400).json({ error: 'This plan is sales-assisted — use /api/billing/contact-sales instead of instant checkout.' });
+  }
 
   const tenant = await prisma.tenant.findUnique({ where: { id: req.user.tenantId } });
 
@@ -45,6 +48,23 @@ router.post('/checkout', requireAuth, requireRole('owner'), async (req, res) => 
     // just needs a live secret key + real Price IDs from the Stripe dashboard to go live.
     res.status(500).json({ error: 'Stripe not configured yet (placeholder keys in .env)', detail: e.message });
   }
+});
+
+// POST /api/billing/contact-sales — Enterprise / Enterprise Key leads (sales-assisted, no Stripe Checkout)
+router.post('/contact-sales', requireAuth, requireRole('owner'), async (req, res) => {
+  const { plan, seatsRequested, notes } = req.body;
+  const planConfig = PLANS[plan];
+  if (!planConfig || !isSalesAssisted(plan)) return res.status(400).json({ error: 'Not a sales-assisted plan' });
+
+  const tenant = await prisma.tenant.findUnique({ where: { id: req.user.tenantId } });
+  // No CRM/mailbox is wired up for lead routing yet — log it so it's at least visible in
+  // Render's logs / captured for now. Swap this for a real notification (email, Slack, CRM
+  // webhook) once one is configured.
+  console.log('[ENTERPRISE LEAD]', {
+    tenantId: tenant.id, tenantName: tenant.name, requestedBy: req.user.email,
+    plan, seatsRequested, notes, at: new Date().toISOString(),
+  });
+  res.json({ received: true, message: 'Thanks — our team will reach out shortly to set up your Enterprise plan.' });
 });
 
 // POST /api/billing/webhook — Stripe calls this on subscription events (must use raw body — see server.js)

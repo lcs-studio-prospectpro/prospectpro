@@ -12,6 +12,7 @@ const billingRoutes = require('./routes/billing');
 const reportsRoutes = require('./routes/reports');
 const tenantRoutes = require('./routes/tenant');
 const crmRoutes = require('./routes/crm');
+const licenseKeysRoutes = require('./routes/licenseKeys');
 const { startScheduledSync } = require('./lib/crm/sync');
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/tenant', tenantRoutes);
 app.use('/api/crm', crmRoutes);
+app.use('/api/license-keys', licenseKeysRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

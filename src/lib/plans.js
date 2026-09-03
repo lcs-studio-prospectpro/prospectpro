@@ -1,25 +1,16 @@
 // Plan ladder, modeled on the standard per-seat + feature-gated SaaS pattern used by
 // GoHighLevel (Starter/Unlimited/Agency Pro), Close, and Apollo: cheapest tier caps seats
-// and locks integrations; the top tier removes caps and unlocks the full toolset.
+// and locks integrations; higher tiers raise caps and unlock the full toolset.
+//
+// Product lines:
+//  - Cloud dashboard (intro / smallbiz / pro / enterprise / enterprise_key) — multi-user, web-based.
+//  - Desktop App (desktop_basic / desktop_plus / desktop_pro) — per-user downloadable license.
+//  - Mobile App (mobile_basic / mobile_plus / mobile_pro) — per-user license, field-rep focused.
+//  - Enterprise tiers are sales-assisted (no self-serve Stripe Checkout) and priced per seat
+//    with volume discounts; Enterprise Key additionally issues redeemable registration keys
+//    so the org's own admin can self-provision new logins without individual invites.
 const PLANS = {
-  desktop: {
-    key: 'desktop',
-    label: 'Desktop',
-    price: 12,
-    priceId: process.env.STRIPE_PRICE_DESKTOP,
-    seats: 1,
-    territories: 1,
-    crmSync: false,
-    isDesktop: true, // downloadable single-license desktop app, not the multi-user cloud dashboard
-    tagline: 'One rep, one region. Download the desktop app and go — no team setup required.',
-    features: [
-      'Windows & Mac desktop app (1 license per download)',
-      'Set your region once by county or zip code',
-      'Search, confirm & call workflow',
-      'Call logging & follow-ups',
-      'CSV import/export',
-    ],
-  },
+  // ───────────────────────── CLOUD (multi-user web dashboard) ─────────────────────────
   intro: {
     key: 'intro',
     label: 'Intro',
@@ -28,6 +19,7 @@ const PLANS = {
     seats: 1,
     territories: 1,
     crmSync: false,
+    productLine: 'cloud',
     tagline: 'Solo reps getting started with a defined territory.',
     features: [
       '1 user seat',
@@ -45,6 +37,7 @@ const PLANS = {
     seats: 10,
     territories: 5,
     crmSync: true,
+    productLine: 'cloud',
     tagline: 'Small teams with VAs running multiple territories.',
     features: [
       'Up to 10 user seats',
@@ -59,22 +52,198 @@ const PLANS = {
     label: 'Professional',
     price: 199,
     priceId: process.env.STRIPE_PRICE_PRO,
-    seats: null, // unlimited
+    seats: 25, // capped (was unlimited) so Enterprise has room to sit above it
     territories: null, // unlimited
     crmSync: true,
-    tagline: 'Growing sales orgs and multi-region deployments.',
+    productLine: 'cloud',
+    tagline: 'Growing sales orgs running multi-region deployments.',
     features: [
-      'Unlimited user seats',
+      'Up to 25 user seats',
       'Unlimited territories / verticals',
       'Bi-directional CRM sync, all supported providers',
       'Priority support',
       'Early access to new CRM integrations',
     ],
   },
+  enterprise: {
+    key: 'enterprise',
+    label: 'Enterprise',
+    price: 99, // per seat / month, volume-quoted — see pricePerSeat below
+    pricePerSeat: 99,
+    minSeats: 30,
+    maxSeats: 50,
+    priceId: null, // sales-assisted, no self-serve Stripe price
+    salesAssisted: true,
+    seats: 50,
+    territories: null,
+    crmSync: true,
+    productLine: 'cloud',
+    tagline: 'Organizations with 30–50 users needing admin controls and dedicated support.',
+    features: [
+      '30–50 user seats (~$99/seat/mo, volume-quoted)',
+      'Unlimited territories / verticals',
+      'Admin console with team-wide reporting',
+      'SSO-ready (SAML/Google Workspace)',
+      'Bi-directional CRM sync, all supported providers',
+      'Dedicated onboarding + priority SLA support',
+    ],
+  },
+  enterprise_key: {
+    key: 'enterprise_key',
+    label: 'Enterprise Key',
+    price: 79, // per seat / month, volume-quoted
+    pricePerSeat: 79,
+    minSeats: 50,
+    maxSeats: 100,
+    priceId: null,
+    salesAssisted: true,
+    seats: 100,
+    territories: null,
+    crmSync: true,
+    productLine: 'cloud',
+    usesRegistrationKeys: true,
+    tagline: 'Organizations with 50–100 users — self-provision seats with registration keys.',
+    features: [
+      '50–100 user seats (~$79/seat/mo, volume-quoted)',
+      'Everything in Enterprise',
+      'Registration-key seat provisioning — buy a key block, IT distributes keys, staff redeem their own login',
+      'Bulk CSV key export & revoke/reissue',
+      'Dedicated customer success manager',
+    ],
+  },
+
+  // ───────────────────────── DESKTOP APP (per-user downloadable license) ─────────────────────────
+  desktop_basic: {
+    key: 'desktop_basic',
+    label: 'Desktop Basic',
+    price: 12,
+    priceId: process.env.STRIPE_PRICE_DESKTOP_BASIC || process.env.STRIPE_PRICE_DESKTOP,
+    seats: 1,
+    territories: 1,
+    crmSync: false,
+    productLine: 'desktop',
+    isDesktop: true,
+    tagline: 'One rep, one region. Download the desktop app and go — no team setup required.',
+    features: [
+      'Windows & Mac desktop app (1 license per download)',
+      'Set your region once by county or zip code',
+      'Search, confirm & call workflow',
+      'Call logging & follow-ups',
+      'CSV import/export',
+    ],
+  },
+  desktop_plus: {
+    key: 'desktop_plus',
+    label: 'Desktop Plus',
+    price: 19,
+    priceId: process.env.STRIPE_PRICE_DESKTOP_PLUS,
+    seats: 1,
+    territories: 3,
+    crmSync: true,
+    productLine: 'desktop',
+    isDesktop: true,
+    tagline: 'For reps covering multiple regions who need CRM sync.',
+    features: [
+      'Everything in Desktop Basic',
+      'Up to 3 territories by county or zip',
+      'Route planning with map view',
+      'Bi-directional CRM sync (1 provider)',
+    ],
+  },
+  desktop_pro: {
+    key: 'desktop_pro',
+    label: 'Desktop Pro',
+    price: 29,
+    priceId: process.env.STRIPE_PRICE_DESKTOP_PRO,
+    seats: 1,
+    territories: null,
+    crmSync: true,
+    productLine: 'desktop',
+    isDesktop: true,
+    tagline: 'Power users running unlimited territories from the desktop app.',
+    features: [
+      'Everything in Desktop Plus',
+      'Unlimited territories',
+      'Bi-directional CRM sync, all supported providers',
+      'Priority support',
+    ],
+  },
+
+  // ───────────────────────── MOBILE APP (per-user license, field-rep focused) ─────────────────────────
+  mobile_basic: {
+    key: 'mobile_basic',
+    label: 'Mobile Basic',
+    price: 15,
+    priceId: process.env.STRIPE_PRICE_MOBILE_BASIC,
+    seats: 1,
+    territories: 1,
+    crmSync: false,
+    productLine: 'mobile',
+    isMobile: true,
+    tagline: 'Field reps who need prospecting in their pocket.',
+    features: [
+      'Mobile-optimized app (1 license per user)',
+      '1 active territory by county or zip',
+      'Offline mode for spotty coverage',
+      'Click-to-call & call logging',
+    ],
+  },
+  mobile_plus: {
+    key: 'mobile_plus',
+    label: 'Mobile Plus',
+    price: 25,
+    priceId: process.env.STRIPE_PRICE_MOBILE_PLUS,
+    seats: 1,
+    territories: 3,
+    crmSync: true,
+    productLine: 'mobile',
+    isMobile: true,
+    tagline: 'Reps covering multiple territories with live GPS routing.',
+    features: [
+      'Everything in Mobile Basic',
+      'Up to 3 territories',
+      'GPS-based route optimization',
+      'Bi-directional CRM sync (1 provider)',
+    ],
+  },
+  mobile_pro: {
+    key: 'mobile_pro',
+    label: 'Mobile Pro',
+    price: 35,
+    priceId: process.env.STRIPE_PRICE_MOBILE_PRO,
+    seats: 1,
+    territories: null,
+    crmSync: true,
+    productLine: 'mobile',
+    isMobile: true,
+    tagline: 'Full-featured mobile access for top-performing field reps.',
+    features: [
+      'Everything in Mobile Plus',
+      'Unlimited territories',
+      'Bi-directional CRM sync, all supported providers',
+      'Team location check-ins',
+      'Priority support',
+    ],
+  },
 };
 
 // Plans a tenant can self-serve upgrade/downgrade into via Stripe Checkout.
-const ORDER = ['trial', 'desktop', 'intro', 'smallbiz', 'pro'];
+// Enterprise tiers are intentionally excluded — they're sales-assisted (see salesAssisted flag)
+// and go through a "Contact Sales" flow instead of instant checkout.
+const ORDER = [
+  'trial',
+  'desktop_basic', 'desktop_plus', 'desktop_pro',
+  'mobile_basic', 'mobile_plus', 'mobile_pro',
+  'intro', 'smallbiz', 'pro',
+  'enterprise', 'enterprise_key',
+];
+
+// Tiers shown grouped by product line in the Billing UI.
+const PRODUCT_LINES = [
+  { key: 'cloud', label: 'Cloud Dashboard', plans: ['intro', 'smallbiz', 'pro', 'enterprise', 'enterprise_key'] },
+  { key: 'desktop', label: 'Desktop App', plans: ['desktop_basic', 'desktop_plus', 'desktop_pro'] },
+  { key: 'mobile', label: 'Mobile App', plans: ['mobile_basic', 'mobile_plus', 'mobile_pro'] },
+];
 
 function getPlan(planKey) {
   return PLANS[planKey] || null;
@@ -98,4 +267,35 @@ function crmSyncAllowed(planKey) {
   return plan ? plan.crmSync : false;
 }
 
-module.exports = { PLANS, ORDER, getPlan, seatLimit, territoryLimit, crmSyncAllowed };
+// Enterprise Key is the only tier where seat count isn't fixed by the plan — it's however
+// many registration keys the org has purchased (see LicenseKey model). Use this instead of
+// seatLimit() wherever a tenant's plan might be enterprise_key (e.g. before inviting a user).
+async function effectiveSeatLimit(tenant, prisma) {
+  if (tenant.plan === 'enterprise_key') {
+    return prisma.licenseKey.count({ where: { tenantId: tenant.id, status: { not: 'revoked' } } });
+  }
+  return seatLimit(tenant.plan);
+}
+
+function usesRegistrationKeys(planKey) {
+  const plan = getPlan(planKey);
+  return !!(plan && plan.usesRegistrationKeys);
+}
+
+function isSalesAssisted(planKey) {
+  const plan = getPlan(planKey);
+  return !!(plan && plan.salesAssisted);
+}
+
+module.exports = {
+  PLANS,
+  ORDER,
+  PRODUCT_LINES,
+  getPlan,
+  seatLimit,
+  effectiveSeatLimit,
+  territoryLimit,
+  crmSyncAllowed,
+  usesRegistrationKeys,
+  isSalesAssisted,
+};

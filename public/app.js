@@ -552,30 +552,63 @@ async function editScript(verticalId) {
 }
 
 // ── BILLING VIEW ──
-async function renderBillingView() {
-  const content = document.getElementById('content');
-  const [status, plans] = await Promise.all([api('/billing/status'), api('/billing/plans')]);
-  const cards = plans.map(p => {
-    const isCurrent = status.plan === p.key;
-    const seats = p.seats === null ? 'Unlimited seats' : `Up to ${p.seats} seat${p.seats > 1 ? 's' : ''}`;
-    const territories = p.territories === null ? 'Unlimited territories' : `Up to ${p.territories} territor${p.territories > 1 ? 'ies' : 'y'}`;
-    return `
+const PRODUCT_LINE_GROUPS = [
+  { key: 'cloud', label: 'Cloud Dashboard', blurb: 'Multi-user web dashboard for teams and admins.', plans: ['intro', 'smallbiz', 'pro', 'enterprise', 'enterprise_key'] },
+  { key: 'desktop', label: 'Desktop App', blurb: 'Per-user downloadable license for Windows & Mac.', plans: ['desktop_basic', 'desktop_plus', 'desktop_pro'] },
+  { key: 'mobile', label: 'Mobile App', blurb: 'Per-user license for field reps working on the go.', plans: ['mobile_basic', 'mobile_plus', 'mobile_pro'] },
+];
+
+function billingPlanCard(p, status) {
+  const isCurrent = status.plan === p.key;
+  const seats = p.salesAssisted
+    ? `${p.minSeats}\u2013${p.maxSeats} seats (~$${p.pricePerSeat}/seat/mo)`
+    : p.seats === null ? 'Unlimited seats' : `Up to ${p.seats} seat${p.seats > 1 ? 's' : ''}`;
+  const territories = p.territories === null ? 'Unlimited territories' : `Up to ${p.territories} territor${p.territories > 1 ? 'ies' : 'y'}`;
+  const priceHtml = p.salesAssisted
+    ? `<div style="font-size:16px;font-weight:800">Custom<span style="font-size:12px;font-weight:400;color:var(--mute)"> quote</span></div>`
+    : `<div style="font-size:22px;font-weight:800">$${p.price}<span style="font-size:12px;font-weight:400;color:var(--mute)">/mo</span></div>`;
+  let button;
+  if (isCurrent) {
+    button = `<button class="btn" disabled>Current Plan</button>`;
+  } else if (p.isDesktop) {
+    button = `<button class="btn primary" onclick="window.open('/download.html','_blank')">Download Desktop App</button>`;
+  } else if (p.isMobile) {
+    button = `<button class="btn primary" onclick="checkout('${p.key}')">Choose ${p.label}</button>`;
+  } else if (p.salesAssisted) {
+    button = `<button class="btn primary" onclick="showContactSalesForm('${p.key}')">Contact Sales</button>`;
+  } else {
+    button = `<button class="btn primary" onclick="checkout('${p.key}')">${p.key === 'intro' ? 'Choose' : 'Upgrade to'} ${p.label}</button>`;
+  }
+  return `
     <div class="card" style="width:250px;display:flex;flex-direction:column;${isCurrent ? 'border:2px solid var(--gold)' : ''}">
       <h3 style="margin-top:0">${p.label}</h3>
-      <div style="font-size:22px;font-weight:800">$${p.price}<span style="font-size:12px;font-weight:400;color:var(--mute)">/mo</span></div>
+      ${priceHtml}
       <p style="font-size:12px;color:var(--mute);min-height:32px">${p.tagline}</p>
       <ul style="font-size:12px;color:var(--mute);padding-left:18px;flex:1">
         <li>${seats}</li>
         <li>${territories}</li>
         ${p.features.slice(2).map(f => `<li>${f}</li>`).join('')}
       </ul>
-      ${isCurrent
-        ? `<button class="btn" disabled>Current Plan</button>`
-        : p.isDesktop
-          ? `<button class="btn primary" onclick="window.open('/download.html','_blank')">Download Desktop App</button>`
-          : `<button class="btn primary" onclick="checkout('${p.key}')">${p.key === 'intro' ? 'Choose' : 'Upgrade to'} ${p.label}</button>`}
+      ${button}
     </div>`;
-  }).join('');
+}
+
+async function renderBillingView() {
+  const content = document.getElementById('content');
+  const [status, plans] = await Promise.all([api('/billing/status'), api('/billing/plans')]);
+  const byKey = {};
+  plans.forEach(p => { byKey[p.key] = p; });
+
+  const groupsHtml = PRODUCT_LINE_GROUPS.map(g => `
+    <div style="margin-top:22px">
+      <h3 style="margin-bottom:2px">${g.label}</h3>
+      <p style="font-size:12px;color:var(--mute);margin-top:0 0 10px">${g.blurb}</p>
+      <div class="grid" style="display:flex;flex-wrap:wrap;gap:16px;margin-top:10px">
+        ${g.plans.filter(k => byKey[k]).map(k => billingPlanCard(byKey[k], status)).join('')}
+      </div>
+    </div>`).join('');
+
+  const licenseKeyPanel = status.plan === 'enterprise_key' ? await renderLicenseKeyPanelHtml() : '';
 
   content.innerHTML = `
     <div class="stat-row">
@@ -583,10 +616,93 @@ async function renderBillingView() {
       <div class="stat-box"><div class="n">${status.subscriptionStatus}</div><div class="l">Status</div></div>
       ${status.trialDaysLeft !== null ? `<div class="stat-box"><div class="n">${status.trialDaysLeft}</div><div class="l">Trial Days Left</div></div>` : ''}
     </div>
-    <p style="font-size:11px;color:var(--mute);margin-top:12px;max-width:640px">Priced below comparable prospecting/CRM tools (e.g. Close from $19&#8211;49/seat/mo, Apollo from $49/seat/mo, GoHighLevel from $97&#8211;497/mo) while still including bi-directional CRM sync at the Small Business tier.</p>
-    <div class="grid" style="display:flex;flex-wrap:wrap;gap:16px;margin-top:14px">${cards}</div>
+    <p style="font-size:11px;color:var(--mute);margin-top:12px;max-width:640px">Priced below comparable prospecting/CRM tools (e.g. Close from $19&#8211;49/seat/mo, Apollo from $49/seat/mo, GoHighLevel from $97&#8211;497/mo) while still including bi-directional CRM sync at the Small Business tier. Enterprise tiers (30+ users) are volume-quoted and sales-assisted.</p>
+    ${groupsHtml}
+    <div id="contactSalesFormWrap" style="margin-top:20px"></div>
     <div id="billingMsg" style="margin-top:14px;font-size:12px;color:var(--mute)"></div>
+    ${licenseKeyPanel}
     ${renderLegalContactPanel()}`;
+}
+
+function showContactSalesForm(planKey) {
+  const wrap = document.getElementById('contactSalesFormWrap');
+  wrap.innerHTML = `
+    <div class="card" style="max-width:420px">
+      <h3 style="margin-top:0">Contact Sales — ${planKey === 'enterprise' ? 'Enterprise' : 'Enterprise Key'}</h3>
+      <label style="display:block;font-size:12px;margin-top:6px">Seats needed
+        <input type="number" id="salesSeats" min="1" style="display:block;width:100%;margin-top:4px" />
+      </label>
+      <label style="display:block;font-size:12px;margin-top:10px">Notes (optional)
+        <textarea id="salesNotes" rows="3" style="display:block;width:100%;margin-top:4px"></textarea>
+      </label>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn primary" onclick="submitContactSales('${planKey}')">Submit</button>
+        <button class="btn" onclick="document.getElementById('contactSalesFormWrap').innerHTML=''">Cancel</button>
+      </div>
+      <div id="contactSalesMsg" style="margin-top:10px;font-size:12px;color:var(--mute)"></div>
+    </div>`;
+}
+
+async function submitContactSales(planKey) {
+  const msg = document.getElementById('contactSalesMsg');
+  const seatsRequested = parseInt(document.getElementById('salesSeats').value, 10) || null;
+  const notes = document.getElementById('salesNotes').value.trim();
+  msg.textContent = 'Sending...';
+  try {
+    const res = await api('/billing/contact-sales', { method: 'POST', body: { plan: planKey, seatsRequested, notes } });
+    msg.textContent = '✓ ' + res.message;
+  } catch (e) {
+    msg.textContent = '⚠ ' + e.message;
+  }
+}
+
+// ── LICENSE KEYS (Enterprise Key plan — self-service seat provisioning) ──
+async function renderLicenseKeyPanelHtml() {
+  let keys = [];
+  try { keys = await api('/license-keys'); } catch (e) { /* not entitled or none yet */ }
+  const unassigned = keys.filter(k => k.status === 'unassigned').length;
+  const redeemed = keys.filter(k => k.status === 'redeemed').length;
+  const rows = keys.slice(0, 50).map(k => `
+    <tr>
+      <td style="font-family:monospace;font-size:12px">${k.code}</td>
+      <td><span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${k.status === 'redeemed' ? 'var(--green-bg)' : k.status === 'revoked' ? 'var(--red-bg)' : 'var(--amber-bg)'}">${k.status}</span></td>
+      <td style="font-size:12px;color:var(--mute)">${k.assignedEmail || '—'}</td>
+      <td>${k.status !== 'revoked' ? `<button class="btn link" onclick="revokeLicenseKey('${k.id}')">Revoke</button>` : ''}</td>
+    </tr>`).join('');
+  return `
+    <div class="card" style="margin-top:20px;max-width:640px">
+      <h3 style="margin-top:0">Registration Keys</h3>
+      <p style="font-size:12px;color:var(--mute)">${unassigned} unassigned &middot; ${redeemed} redeemed &middot; ${keys.length} total purchased seats. Share unredeemed keys with your team — each person creates their own login by redeeming a key at <code>/redeem</code>.</p>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:12px">
+        <label style="font-size:12px">Generate
+          <input type="number" id="genKeyCount" value="5" min="1" max="100" style="display:block;width:80px;margin-top:4px" />
+        </label>
+        <button class="btn primary" onclick="generateLicenseKeys()">Generate Keys</button>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="text-align:left;color:var(--mute)"><th>Code</th><th>Status</th><th>Assigned Email</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4" style="color:var(--mute)">No keys generated yet.</td></tr>'}</tbody>
+      </table>
+      <div id="licenseKeyMsg" style="margin-top:10px;font-size:12px;color:var(--mute)"></div>
+    </div>`;
+}
+
+async function generateLicenseKeys() {
+  const msg = document.getElementById('licenseKeyMsg');
+  const count = parseInt(document.getElementById('genKeyCount').value, 10) || 1;
+  msg.textContent = 'Generating...';
+  try {
+    await api('/license-keys/generate', { method: 'POST', body: { count } });
+    renderBillingView();
+  } catch (e) {
+    msg.textContent = '⚠ ' + e.message;
+  }
+}
+
+async function revokeLicenseKey(id) {
+  if (!confirm('Revoke this key? If already redeemed, the user\'s login is unaffected but the seat no longer counts toward your pool for new invites.')) return;
+  await api(`/license-keys/${id}/revoke`, { method: 'POST' });
+  renderBillingView();
 }
 
 // Owner/admin-only legal & contact info — never shown outside this admin-facing panel.

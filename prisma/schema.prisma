@@ -29,6 +29,22 @@ model Tenant {
   callLogs      CallLog[]
   tasks         VaTask[]
   crmConnection CrmConnection?
+  licenseKeys   LicenseKey[]
+}
+
+// ── LICENSE KEYS (Enterprise Key tier — org buys a block of seats, self-provisions logins) ──
+model LicenseKey {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  code         String    @unique // e.g. PP-ENT-7F3K-9QXZ, shown to the admin to distribute
+  status       String    @default("unassigned") // unassigned | redeemed | revoked
+  assignedEmail String?  // optional — admin can pre-assign a key to a specific person's email
+  redeemedByUserId String?
+  redeemedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([tenantId, status])
 }
 
 // ── USERS (scoped to a tenant, role-based) ──

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redeem Registration Key — ProspectPro</title>
+<style>
+  :root{ --navy:#1B3A5C; --navy-dark:#0f2338; --gold:#d4af37; --bg:#f6f8fa; --border:#e5e9ee; --text:#1c2530; --mute:#68758a; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:32px;box-shadow:0 10px 30px rgba(16,24,40,.08);width:100%;max-width:420px}
+  .logo{font-weight:800;font-size:20px;margin-bottom:6px;color:var(--navy)}
+  .logo span{color:var(--gold)}
+  h1{font-size:18px;margin:0 0 4px}
+  p.sub{font-size:13px;color:var(--mute);margin-top:0}
+  label{display:block;font-size:12px;font-weight:600;margin-top:14px}
+  input{display:block;width:100%;margin-top:4px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px}
+  button{width:100%;margin-top:20px;padding:11px;border:none;border-radius:8px;background:var(--navy);color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+  button:hover{opacity:.92}
+  #msg{margin-top:14px;font-size:13px;text-align:center}
+  .ok{color:#1a7f37} .err{color:#c0392b}
+  a{color:var(--navy)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">Prospect<span>Pro</span></div>
+  <h1>Redeem your registration key</h1>
+  <p class="sub">Your admin gave you a key (e.g. PP-ENT-XXXX-XXXX) to create your own ProspectPro login.</p>
+  <label>Registration key <input id="code" placeholder="PP-ENT-XXXX-XXXX" /></label>
+  <label>Full name <input id="name" /></label>
+  <label>Work email <input id="email" type="email" /></label>
+  <label>Password <input id="password" type="password" /></label>
+  <button onclick="redeem()">Create my account</button>
+  <div id="msg"></div>
+  <p class="sub" style="margin-top:18px;text-align:center">Already have an account? <a href="/">Sign in</a></p>
+</div>
+<script>
+async function redeem() {
+  const code = document.getElementById('code').value.trim();
+  const name = document.getElementById('name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const msg = document.getElementById('msg');
+  msg.textContent = 'Creating your account...';
+  msg.className = '';
+  try {
+    const res = await fetch('/api/auth/redeem-key', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, name, email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not redeem key');
+    localStorage.setItem('pp_token', data.token);
+    localStorage.setItem('pp_user', JSON.stringify(data.user));
+    localStorage.setItem('pp_tenant', JSON.stringify(data.tenant));
+    msg.textContent = '✓ Account created — redirecting...';
+    msg.className = 'ok';
+    setTimeout(() => { window.location.href = '/'; }, 900);
+  } catch (e) {
+    msg.textContent = '⚠ ' + e.message;
+    msg.className = 'err';
+  }
+}
+</script>
+</body>
+</html>
