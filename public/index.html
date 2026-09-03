@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProspectPro — Territory & Prospect Management</title>
+<style>
+  :root{
+    --navy:#1B3A5C; --navy-dark:#122740; --gold:#d4af37; --gold-dark:#8a7328;
+    --bg:#f4f6f8; --card:#fff; --border:#e2e6ea; --text:#222; --mute:#6b7580;
+    --green:#22c55e; --red:#ef4444; --amber:#d4af37;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text)}
+  .hidden{display:none !important}
+
+  /* ── Auth screens ── */
+  #authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--navy) 0%,var(--navy-dark) 100%)}
+  .auth-card{background:#fff;border-radius:14px;padding:36px;width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .auth-logo{font-size:22px;font-weight:800;color:var(--navy);margin-bottom:2px}
+  .auth-logo span{color:var(--gold-dark)}
+  .auth-sub{font-size:12px;color:var(--mute);margin-bottom:24px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:11px;font-weight:600;color:var(--mute);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+  .field input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px}
+  .field input:focus{outline:none;border-color:var(--navy)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--text)}
+  .btn:hover{background:#f4f4f4}
+  .btn.primary{background:var(--gold);border-color:var(--gold-dark);color:#3a2f0d;width:100%;padding:11px}
+  .btn.primary:hover{background:#c9a02f}
+  .btn.link{border:none;background:none;color:var(--navy);text-decoration:underline;padding:4px}
+  .auth-toggle{text-align:center;margin-top:14px;font-size:12px;color:var(--mute)}
+  .auth-error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:14px}
+  .auth-trial{background:#eef4fb;color:var(--navy);border-radius:8px;padding:8px 12px;font-size:11px;margin-top:16px;text-align:center}
+
+  /* ── App shell ── */
+  #app{display:flex;height:100vh}
+  .sidebar{width:220px;background:var(--navy-dark);color:#fff;display:flex;flex-direction:column;flex-shrink:0}
+  .sidebar-header{padding:18px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
+  .sidebar-logo{font-weight:800;font-size:16px}
+  .sidebar-logo span{color:var(--gold)}
+  .sidebar-tenant{font-size:11px;color:#9fb3c8;margin-top:2px}
+  .nav-item{padding:11px 16px;font-size:13px;cursor:pointer;color:#cdd8e3;border-left:3px solid transparent;display:flex;align-items:center;gap:8px}
+  .nav-item:hover{background:rgba(255,255,255,.06)}
+  .nav-item.active{background:rgba(255,255,255,.1);color:#fff;border-left-color:var(--gold)}
+  .sidebar-footer{margin-top:auto;padding:14px 16px;border-top:1px solid rgba(255,255,255,.1);font-size:11px;color:#9fb3c8}
+  .trial-pill{background:var(--gold);color:#3a2f0d;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;display:inline-block;margin-top:4px}
+
+  .main{flex:1;overflow-y:auto}
+  .topbar{background:#fff;border-bottom:1px solid var(--border);padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
+  .topbar h1{font-size:16px;margin:0}
+  .content{padding:24px}
+
+  .toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+  select,.select{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .contact-card{border-left:4px solid var(--mute)}
+  .contact-card.tier-A{border-left-color:var(--gold)}
+  .contact-card.tier-B{border-left-color:var(--green)}
+  .contact-card.tier-C{border-left-color:#6366f1}
+  .contact-name{font-weight:700;font-size:14px}
+  .contact-meta{font-size:12px;color:var(--mute);margin-top:2px}
+  .tag{display:inline-block;background:#eef1f4;color:var(--navy);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;margin-top:8px}
+  .dot-row{display:flex;gap:4px;float:right}
+  .dot{width:7px;height:7px;border-radius:50%}
+  .dot.ok{background:var(--green)} .dot.bad{background:var(--red)}
+  .confirm-row{margin-top:10px;display:flex;gap:6px;align-items:center}
+  .confirm-row input{flex:1;padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px}
+  .badge-confirmed{font-size:11px;color:var(--green);font-weight:600;margin-top:8px}
+  .empty{color:var(--mute);font-size:13px;text-align:center;padding:40px 0}
+
+  .vertical-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-size:12px;margin-right:6px;margin-bottom:6px}
+  .vertical-chip.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .vertical-count{background:rgba(0,0,0,.08);border-radius:10px;padding:0 6px;font-size:10px}
+  .vertical-chip.active .vertical-count{background:rgba(255,255,255,.2)}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:50}
+  .modal{background:#fff;border-radius:12px;padding:24px;width:420px;max-height:85vh;overflow-y:auto}
+  .modal h3{margin-top:0}
+  .banner{background:#fff8e6;border:1px solid #f0d999;color:#8a6d1a;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:16px}
+  table.simple{width:100%;border-collapse:collapse;font-size:12px}
+  table.simple th{text-align:left;color:var(--mute);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--border)}
+  table.simple td{padding:8px;border-bottom:1px solid var(--border)}
+  .stat-row{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+  .stat-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 18px;min-width:140px}
+  .stat-box .n{font-size:22px;font-weight:800;color:var(--navy)}
+  .stat-box .l{font-size:11px;color:var(--mute);text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<!-- ══ AUTH SCREEN ══ -->
+<div id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo">Prospect<span>Pro</span></div>
+    <div class="auth-sub">Territory & prospect management for regional sales teams</div>
+    <div id="authError" class="auth-error hidden"></div>
+
+    <div id="loginForm">
+      <div class="field"><label>Email</label><input id="li_email" type="email" placeholder="you@company.com"></div>
+      <div class="field"><label>Password</label><input id="li_password" type="password" placeholder="••••••••"></div>
+      <button class="btn primary" onclick="login()">Sign in</button>
+      <div class="auth-toggle">New here? <span class="btn link" onclick="showSignup()">Create your company account</span></div>
+    </div>
+
+    <div id="signupForm" class="hidden">
+      <div class="field"><label>Company name</label><input id="su_company" placeholder="Bright Path Lighting Reps"></div>
+      <div class="field"><label>Your name</label><input id="su_name" placeholder="Dana Reyes"></div>
+      <div class="field"><label>Work email</label><input id="su_email" type="email" placeholder="dana@brightpath.com"></div>
+      <div class="field"><label>Password</label><input id="su_password" type="password" placeholder="Min 8 characters"></div>
+      <button class="btn primary" onclick="signup()">Start 14-day free trial</button>
+      <div class="auth-toggle">Already have an account? <span class="btn link" onclick="showLogin()">Sign in</span></div>
+      <div class="auth-trial">No credit card required — full features for 14 days</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ══ -->
+<div id="app" class="hidden">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">Prospect<span>Pro</span></div>
+      <div class="sidebar-tenant" id="tenantName">—</div>
+      <div class="trial-pill hidden" id="trialPill"></div>
+    </div>
+    <div class="nav-item active" data-view="contacts" onclick="switchView('contacts')">👥 Contacts</div>
+    <div class="nav-item" data-view="tasks" onclick="switchView('tasks')">✅ VA Task Queue</div>
+    <div class="nav-item" data-view="leaderboard" onclick="switchView('leaderboard')">🏆 Leaderboard</div>
+    <div class="nav-item" data-view="verticals" onclick="switchView('verticals')">🗂️ Verticals</div>
+    <div class="nav-item" data-view="billing" onclick="switchView('billing')">💳 Billing</div>
+    <div class="sidebar-footer">
+      <span id="userName"></span> · <span id="userRole"></span><br>
+      <span class="btn link" style="color:#9fb3c8;padding:0" onclick="logout()">Sign out</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <h1 id="viewTitle">Contacts</h1>
+      <div>
+        <button class="btn" onclick="openImportModal()" id="importContactsBtn" style="margin-right:8px">⬆ Import CSV</button>
+        <button class="btn" onclick="openAddContactModal()" id="addContactBtn">+ Add Contact</button>
+      </div>
+    </div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

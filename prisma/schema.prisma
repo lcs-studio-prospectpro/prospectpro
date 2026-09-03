@@ -1,0 +1,138 @@
+// ProspectPro (working name) — multi-tenant SaaS schema
+// Dev uses SQLite for zero-setup; swap provider to "postgresql" + DATABASE_URL
+// for production (Prisma migrations are compatible with both with minor tweaks).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── TENANT (one per paying company/account) ──
+model Tenant {
+  id                String    @id @default(cuid())
+  name              String
+  slug              String    @unique
+  plan              String    @default("trial") // trial | starter | pro | team
+  stripeCustomerId  String?
+  stripeSubId       String?
+  subscriptionStatus String   @default("trialing") // trialing | active | past_due | canceled
+  trialEndsAt       DateTime?
+  createdAt         DateTime  @default(now())
+
+  users     User[]
+  verticals Vertical[]
+  contacts  Contact[]
+  callLogs  CallLog[]
+  tasks     VaTask[]
+}
+
+// ── USERS (scoped to a tenant, role-based) ──
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  email        String
+  passwordHash String
+  name         String
+  role         String   @default("rep") // owner | admin | rep | va
+  vaCode       String?  // auto-derived from email local-part, e.g. ANGEL
+  createdAt    DateTime @default(now())
+
+  callLogs  CallLog[]
+  tasks     VaTask[]  @relation("assignedTasks")
+
+  @@unique([tenantId, email])
+}
+
+// ── VERTICALS (fully customer-defined — no hardcoded list) ──
+model Vertical {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  key         String   // slug, e.g. "architect"
+  label       String   // display name, e.g. "Architects"
+  categoryCode String  // short tag code, e.g. "ARCH" — used in Category ID / CRM tags
+  batchSize   Int      @default(50)
+  confirmThreshold Float @default(0.8) // 80%
+  color       String   @default("#1B3A5C")
+  archived    Boolean  @default(false)
+  callScript  String?  // suggested call opener/talking points for this vertical
+  emailScript String?  // suggested intro email template for this vertical
+  createdAt   DateTime @default(now())
+
+  contacts Contact[]
+
+  @@unique([tenantId, key])
+}
+
+// ── CONTACTS ──
+model Contact {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  verticalId     String
+  vertical       Vertical @relation(fields: [verticalId], references: [id])
+  name           String
+  contactName    String?
+  contactTitle   String?
+  address        String?
+  lat            Float?
+  lng            Float?
+  phone          String?
+  email          String?
+  website        String?
+  tier           String   @default("B") // A | B | C
+  dealerStage    String   @default("intro")
+  notes          String?
+  linkedin       String?
+  instagram      String?
+  facebook       String?
+  twitter        String?
+  categoryId     String?  // e.g. ARCH-B1
+  batchNumber    Int      @default(1)
+  dataConfirmed  Boolean  @default(false)
+  confirmedById  String?
+  confirmedAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  callLogs CallLog[]
+  tasks    VaTask[]
+
+  @@index([tenantId, verticalId])
+}
+
+// ── CALL LOG (finally a real durable table — gap identified in the AIT build) ──
+model CallLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  contactId  String
+  contact    Contact  @relation(fields: [contactId], references: [id])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  outcome    String   // positive | hesitant | low | ready
+  notes      String?
+  nextAction String?
+  followUpAt DateTime?
+  createdAt  DateTime @default(now())
+}
+
+// ── VA TASK QUEUE (also a real durable table) ──
+model VaTask {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  contactId    String
+  contact      Contact  @relation(fields: [contactId], references: [id])
+  assignedToId String?
+  assignedTo   User?    @relation("assignedTasks", fields: [assignedToId], references: [id])
+  missingField String   // phone | email | address
+  status       String   @default("open") // open | complete
+  createdAt    DateTime @default(now())
+  completedAt  DateTime?
+}
