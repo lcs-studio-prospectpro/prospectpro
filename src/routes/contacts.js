@@ -53,11 +53,19 @@ router.post('/', async (req, res) => {
   res.status(201).json(contact);
 });
 
+// A single paste/import request is capped regardless of plan — this is a server/DB safety limit,
+// not a monetization lever (the per-vertical batch/confirm gate below already governs how fast a
+// tenant can grow their contact list; this just stops one request from being enormous).
+const MAX_IMPORT_ROWS_PER_REQUEST = 500;
+
 // POST /api/contacts/import — bulk CSV import into a vertical, respecting the same batch/confirm gate
 // Body: { verticalId, rows: [{ name, contactName, contactTitle, address, phone, email, website, tier }, ...] }
 router.post('/import', async (req, res) => {
   const { verticalId, rows } = req.body;
   if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'rows[] is required' });
+  if (rows.length > MAX_IMPORT_ROWS_PER_REQUEST) {
+    return res.status(400).json({ error: `Import is limited to ${MAX_IMPORT_ROWS_PER_REQUEST} rows per paste. Split your CSV into smaller batches and import again.` });
+  }
 
   const vertical = await prisma.vertical.findFirst({ where: { id: verticalId, tenantId: req.user.tenantId } });
   if (!vertical) return res.status(404).json({ error: 'Vertical not found for this account' });

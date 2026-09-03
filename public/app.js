@@ -12,6 +12,7 @@ let state = {
 
 const US_STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
 const RADIUS_OPTIONS = [5, 10, 15, 20, 25, 50, 75, 100, 150, 200, 300, 500];
+const MAX_IMPORT_ROWS = 500; // mirrors server-side cap in src/routes/contacts.js
 
 // ── API helper ──
 async function api(path, opts = {}) {
@@ -429,7 +430,7 @@ function openImportModal() {
     <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
       <div class="modal">
         <h3>Import Contacts from CSV</h3>
-        <div class="banner">First row must be a header with any of: name, contactName, contactTitle, address, phone, email, website, tier. Only "name" is required. Import still respects your batch/confirm-rate rule — rows past a locked batch will be skipped and listed.</div>
+        <div class="banner">First row must be a header with any of: name, contactName, contactTitle, address, phone, email, website, tier. Only "name" is required. Limited to ${MAX_IMPORT_ROWS} rows per paste — split larger lists into multiple imports. Import still respects your batch/confirm-rate rule — rows past a locked batch will be skipped and listed.</div>
         <div class="field"><label>Paste CSV</label>
           <textarea id="csv_text" rows="8" style="width:100%;font-family:monospace;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:8px" placeholder="name,phone,email,address&#10;Acme Architecture,555-1234,info@acme.com,123 Main St"></textarea>
         </div>
@@ -456,6 +457,10 @@ async function runCsvImport() {
   const rows = parseCsv(text);
   const resultEl = document.getElementById('importResult');
   if (!rows.length) { resultEl.textContent = 'No rows found.'; return; }
+  if (rows.length > MAX_IMPORT_ROWS) {
+    resultEl.textContent = `This paste has ${rows.length} rows — imports are limited to ${MAX_IMPORT_ROWS} rows at a time. Split it into smaller pastes and import again.`;
+    return;
+  }
   try {
     const data = await api('/contacts/import', { method: 'POST', body: { verticalId: state.selectedVerticalId, rows } });
     resultEl.innerHTML = `✓ Imported ${data.createdCount}. Skipped ${data.skippedCount}.` +
@@ -518,7 +523,7 @@ async function renderVerticalsView() {
     <div class="toolbar">
       <input id="v_label" placeholder="New vertical name (e.g. Landscape Architects)" style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:220px">
       <input id="v_code" placeholder="Tag code (e.g. LAND)" style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:110px">
-      <input id="v_batch" type="number" value="50" placeholder="Batch size" style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:90px">
+      <input id="v_batch" type="number" value="50" min="10" max="200" title="Batch size must be 10–200" placeholder="Batch size (10–200)" style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:130px">
       <input id="v_call_script" placeholder="Call opener (optional)" style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:220px">
       <button class="btn primary" style="width:auto" onclick="addVertical()">+ Add Vertical</button>
     </div>

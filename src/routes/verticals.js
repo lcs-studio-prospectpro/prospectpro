@@ -37,6 +37,31 @@ function checkCountySizeAllowed(tenant, targetState, targetCounty) {
   return null;
 }
 
+// Batch size ("load N contacts, confirm 80% before the next N") is a data-quality control, not
+// a plan-tier lever — but it must stay bounded or the confirm-gate is meaningless (e.g. someone
+// setting it to 100,000 effectively removes the quality check entirely). Same min/max apply to
+// every tier. Confirm threshold is bounded too so the gate can't be set to 0% (no-op) or >100%.
+const MIN_BATCH_SIZE = 10;
+const MAX_BATCH_SIZE = 200;
+const MIN_CONFIRM_THRESHOLD = 0.5;
+const MAX_CONFIRM_THRESHOLD = 1.0;
+
+function checkBatchConfigAllowed(batchSize, confirmThreshold) {
+  if (batchSize != null) {
+    const n = Number(batchSize);
+    if (!Number.isFinite(n) || n < MIN_BATCH_SIZE || n > MAX_BATCH_SIZE) {
+      return `Batch size must be between ${MIN_BATCH_SIZE} and ${MAX_BATCH_SIZE} (keeps the confirm-before-next-batch rule meaningful).`;
+    }
+  }
+  if (confirmThreshold != null) {
+    const n = Number(confirmThreshold);
+    if (!Number.isFinite(n) || n < MIN_CONFIRM_THRESHOLD || n > MAX_CONFIRM_THRESHOLD) {
+      return `Confirm threshold must be between ${Math.round(MIN_CONFIRM_THRESHOLD * 100)}% and ${Math.round(MAX_CONFIRM_THRESHOLD * 100)}%.`;
+    }
+  }
+  return null;
+}
+
 // GET /api/verticals — list this tenant's verticals (any custom field the sales team sells into)
 router.get('/', async (req, res) => {
   const verticals = await prisma.vertical.findMany({
@@ -62,6 +87,8 @@ router.post('/', requireRole('admin'), async (req, res) => {
   }
   const radiusError = checkRadiusAllowed(tenant, radiusMiles) || checkCountySizeAllowed(tenant, targetState, targetCounty);
   if (radiusError) return res.status(403).json({ error: radiusError });
+  const batchError = checkBatchConfigAllowed(batchSize, confirmThreshold);
+  if (batchError) return res.status(400).json({ error: batchError });
 
   const key = slugify(label);
   try {
@@ -105,6 +132,8 @@ router.patch('/:id', requireRole('admin'), async (req, res) => {
     const radiusError = checkRadiusAllowed(tenant, radiusMiles) || checkCountySizeAllowed(tenant, effState, effCounty);
     if (radiusError) return res.status(403).json({ error: radiusError });
   }
+  const batchError = checkBatchConfigAllowed(batchSize, confirmThreshold);
+  if (batchError) return res.status(400).json({ error: batchError });
 
   const vertical = await prisma.vertical.update({
     where: { id: existing.id },
