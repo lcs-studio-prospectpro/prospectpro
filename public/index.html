@@ -4,15 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProspectPro — Territory & Prospect Management</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
-    --navy:#1B3A5C; --navy-dark:#122740; --gold:#d4af37; --gold-dark:#8a7328;
-    --bg:#f4f6f8; --card:#fff; --border:#e2e6ea; --text:#222; --mute:#6b7580;
-    --green:#22c55e; --red:#ef4444; --amber:#d4af37;
+    --navy:#1B3A5C; --navy-dark:#0f2338; --navy-mid:#24466d; --gold:#d4af37; --gold-dark:#8a7328;
+    --bg:#f6f8fa; --card:#fff; --border:#e5e9ee; --text:#1c2530; --mute:#68758a;
+    --green:#16a34a; --green-bg:#eafaf0; --red:#dc2626; --red-bg:#fdecec; --amber:#b45309; --amber-bg:#fef6e7;
+    --blue:#2563eb; --blue-bg:#eef4ff;
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05); --shadow-md:0 2px 10px rgba(16,24,40,.07);
+    --radius:12px;
   }
   *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text)}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
   .hidden{display:none !important}
+  ::selection{background:#cfe0f2}
+  a{color:var(--navy)}
+  svg.icon{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 
   /* ── Auth screens ── */
   #authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--navy) 0%,var(--navy-dark) 100%)}
@@ -38,58 +46,76 @@
 
   /* ── App shell ── */
   #app{display:flex;height:100vh}
-  .sidebar{width:220px;background:var(--navy-dark);color:#fff;display:flex;flex-direction:column;flex-shrink:0}
-  .sidebar-header{padding:18px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
-  .sidebar-logo{font-weight:800;font-size:16px}
+  .sidebar{width:224px;background:var(--navy-dark);color:#fff;display:flex;flex-direction:column;flex-shrink:0}
+  .sidebar-header{padding:20px 18px 16px}
+  .sidebar-logo{font-weight:800;font-size:17px;letter-spacing:-.2px}
   .sidebar-logo span{color:var(--gold)}
-  .sidebar-tenant{font-size:11px;color:#9fb3c8;margin-top:2px}
-  .nav-item{padding:11px 16px;font-size:13px;cursor:pointer;color:#cdd8e3;border-left:3px solid transparent;display:flex;align-items:center;gap:8px}
-  .nav-item:hover{background:rgba(255,255,255,.06)}
-  .nav-item.active{background:rgba(255,255,255,.1);color:#fff;border-left-color:var(--gold)}
-  .sidebar-footer{margin-top:auto;padding:14px 16px;border-top:1px solid rgba(255,255,255,.1);font-size:11px;color:#9fb3c8}
-  .trial-pill{background:var(--gold);color:#3a2f0d;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;display:inline-block;margin-top:4px}
+  .sidebar-tenant{font-size:11px;color:#8ea3bb;margin-top:3px}
+  .nav-item{margin:2px 10px;padding:9px 12px;font-size:13.5px;font-weight:500;cursor:pointer;color:#b9c7d9;border-radius:8px;display:flex;align-items:center;gap:10px;transition:background .12s,color .12s}
+  .nav-item svg{opacity:.85}
+  .nav-item:hover{background:rgba(255,255,255,.07);color:#fff}
+  .nav-item.active{background:rgba(255,255,255,.12);color:#fff}
+  .nav-item.active svg{opacity:1;color:var(--gold)}
+  .sidebar-footer{margin-top:auto;padding:16px 18px;border-top:1px solid rgba(255,255,255,.08);font-size:11.5px;color:#8ea3bb}
+  .trial-pill{background:rgba(212,175,55,.18);color:var(--gold);border:1px solid rgba(212,175,55,.4);border-radius:20px;padding:2px 9px;font-size:10px;font-weight:700;display:inline-block;margin-top:6px}
 
   .main{flex:1;overflow-y:auto}
-  .topbar{background:#fff;border-bottom:1px solid var(--border);padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
-  .topbar h1{font-size:16px;margin:0}
-  .content{padding:24px}
+  .topbar{background:#fff;border-bottom:1px solid var(--border);padding:16px 28px;display:flex;justify-content:space-between;align-items:center}
+  .topbar h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.2px}
+  .content{padding:28px}
 
   .toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
-  select,.select{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px}
+  select,.select{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;color:var(--text)}
+  select:focus,input:focus,textarea:focus{outline:none;border-color:var(--navy-mid);box-shadow:0 0 0 3px rgba(27,58,92,.08)}
 
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm);transition:box-shadow .15s,transform .15s}
   .contact-card{border-left:4px solid var(--mute)}
   .contact-card.tier-A{border-left-color:var(--gold)}
   .contact-card.tier-B{border-left-color:var(--green)}
-  .contact-card.tier-C{border-left-color:#6366f1}
-  .contact-name{font-weight:700;font-size:14px}
-  .contact-meta{font-size:12px;color:var(--mute);margin-top:2px}
-  .tag{display:inline-block;background:#eef1f4;color:var(--navy);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;margin-top:8px}
+  .contact-card.tier-C{border-left-color:var(--blue)}
+  .contact-name{font-weight:700;font-size:14px;color:var(--text)}
+  .contact-meta{font-size:12px;color:var(--mute);margin-top:3px;line-height:1.6}
+  .tag{display:inline-block;background:var(--blue-bg);color:var(--navy);font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;margin-top:8px;letter-spacing:.2px}
   .dot-row{display:flex;gap:4px;float:right}
   .dot{width:7px;height:7px;border-radius:50%}
   .dot.ok{background:var(--green)} .dot.bad{background:var(--red)}
   .confirm-row{margin-top:10px;display:flex;gap:6px;align-items:center}
-  .confirm-row input{flex:1;padding:6px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px}
-  .badge-confirmed{font-size:11px;color:var(--green);font-weight:600;margin-top:8px}
-  .empty{color:var(--mute);font-size:13px;text-align:center;padding:40px 0}
+  .confirm-row input{flex:1;padding:7px 9px;font-size:12px;border:1px solid var(--border);border-radius:7px}
+  .badge-confirmed{font-size:11px;color:var(--green);font-weight:700;margin-top:8px;display:flex;align-items:center;gap:4px}
+  .empty{color:var(--mute);font-size:13px;text-align:center;padding:48px 0}
 
-  .vertical-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-size:12px;margin-right:6px;margin-bottom:6px}
+  .vertical-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-size:12.5px;margin-right:6px;margin-bottom:6px;background:#fff;color:var(--text);font-weight:500;transition:background .12s,color .12s}
+  .vertical-chip:hover{background:#f0f3f6}
   .vertical-chip.active{background:var(--navy);color:#fff;border-color:var(--navy)}
-  .vertical-count{background:rgba(0,0,0,.08);border-radius:10px;padding:0 6px;font-size:10px}
-  .vertical-chip.active .vertical-count{background:rgba(255,255,255,.2)}
+  .vertical-count{background:rgba(0,0,0,.06);border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700}
+  .vertical-chip.active .vertical-count{background:rgba(255,255,255,.22)}
 
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:50}
-  .modal{background:#fff;border-radius:12px;padding:24px;width:420px;max-height:85vh;overflow-y:auto}
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,24,36,.5);display:flex;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(1px)}
+  .modal{background:#fff;border-radius:14px;padding:26px;width:420px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)}
   .modal h3{margin-top:0}
-  .banner{background:#fff8e6;border:1px solid #f0d999;color:#8a6d1a;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:16px}
-  table.simple{width:100%;border-collapse:collapse;font-size:12px}
-  table.simple th{text-align:left;color:var(--mute);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--border)}
-  table.simple td{padding:8px;border-bottom:1px solid var(--border)}
+  .banner{background:var(--amber-bg);border:1px solid #f0d999;color:#8a5f10;padding:11px 15px;border-radius:10px;font-size:12.5px;margin-bottom:16px;line-height:1.5}
+  table.simple{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.simple th{text-align:left;color:var(--mute);font-weight:600;padding:8px;border-bottom:1px solid var(--border);text-transform:uppercase;font-size:10.5px;letter-spacing:.3px}
+  table.simple td{padding:10px 8px;border-bottom:1px solid var(--border)}
+  table.simple tr:hover td{background:#fafbfc}
   .stat-row{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap}
-  .stat-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 18px;min-width:140px}
-  .stat-box .n{font-size:22px;font-weight:800;color:var(--navy)}
-  .stat-box .l{font-size:11px;color:var(--mute);text-transform:uppercase}
+  .stat-box{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;min-width:140px;box-shadow:var(--shadow-sm)}
+  .stat-box .n{font-size:23px;font-weight:800;color:var(--navy);letter-spacing:-.3px}
+  .stat-box .l{font-size:10.5px;color:var(--mute);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+
+  /* ── Route planning & composer ── */
+  .route-layout{display:flex;gap:16px;align-items:flex-start}
+  .route-list{width:320px;flex-shrink:0;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);max-height:78vh;overflow-y:auto}
+  .route-stop{display:flex;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);align-items:flex-start}
+  .route-stop:last-child{border-bottom:none}
+  .stop-num{width:22px;height:22px;border-radius:50%;background:var(--navy);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+  .map-box{flex:1;height:78vh;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow-sm)}
+  .composer-layout{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+  .composer-panel{width:320px;flex-shrink:0}
+  .composer-output{flex:1;min-width:340px}
+  .tone-chip{display:inline-block;padding:6px 12px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-size:12.5px;margin-right:6px;margin-bottom:6px;background:#fff}
+  .tone-chip.active{background:var(--navy);color:#fff;border-color:var(--navy)}
 </style>
 </head>
 <body>
@@ -139,13 +165,15 @@
       <div class="sidebar-tenant" id="tenantName">—</div>
       <div class="trial-pill hidden" id="trialPill"></div>
     </div>
-    <div class="nav-item active" data-view="search" onclick="switchView('search')">🔍 Search</div>
-    <div class="nav-item" data-view="contacts" onclick="switchView('contacts')">👥 Contacts</div>
-    <div class="nav-item" data-view="tasks" onclick="switchView('tasks')">✅ VA Task Queue</div>
-    <div class="nav-item" data-view="leaderboard" onclick="switchView('leaderboard')">🏆 Leaderboard</div>
-    <div class="nav-item" data-view="verticals" onclick="switchView('verticals')">🗂️ Verticals</div>
-    <div class="nav-item" data-view="billing" onclick="switchView('billing')">💳 Billing</div>
-    <div class="nav-item" data-view="integrations" onclick="switchView('integrations')">🔗 Integrations</div>
+    <div class="nav-item active" data-view="search" onclick="switchView('search')"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Search</div>
+    <div class="nav-item" data-view="contacts" onclick="switchView('contacts')"><svg class="icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Contacts</div>
+    <div class="nav-item" data-view="route" onclick="switchView('route')"><svg class="icon" viewBox="0 0 24 24"><path d="M9 20l-5.5 2V6L9 4m0 16l6 2m-6-2V4m6 18l5.5-2V4L15 6m0 14V6m0 0L9 4"/></svg>Route Planning</div>
+    <div class="nav-item" data-view="composer" onclick="switchView('composer')"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 6l10 7L22 6"/></svg>Email Composer</div>
+    <div class="nav-item" data-view="tasks" onclick="switchView('tasks')"><svg class="icon" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>VA Task Queue</div>
+    <div class="nav-item" data-view="leaderboard" onclick="switchView('leaderboard')"><svg class="icon" viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 6H4a2 2 0 0 0 0 4h1M17 6h3a2 2 0 0 1 0 4h-1"/></svg>Leaderboard</div>
+    <div class="nav-item" data-view="verticals" onclick="switchView('verticals')"><svg class="icon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>Verticals</div>
+    <div class="nav-item" data-view="billing" onclick="switchView('billing')"><svg class="icon" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>Billing</div>
+    <div class="nav-item" data-view="integrations" onclick="switchView('integrations')"><svg class="icon" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.2 1.2"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.2-1.2"/></svg>Integrations</div>
     <div class="sidebar-footer">
       <span id="userName"></span> · <span id="userRole"></span><br>
       <span class="btn link" style="color:#9fb3c8;padding:0" onclick="logout()">Sign out</span><br>

@@ -109,7 +109,7 @@ function switchView(view) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));
   document.getElementById('addContactBtn').classList.toggle('hidden', view !== 'contacts');
   document.getElementById('importContactsBtn').classList.toggle('hidden', view !== 'contacts');
-  const titles = { search: 'Search', contacts: 'Contacts', tasks: 'VA Task Queue', leaderboard: 'Team Leaderboard', verticals: 'Verticals & Categories', billing: 'Billing & Plan', integrations: 'CRM Integrations' };
+  const titles = { search: 'Search', contacts: 'Contacts', tasks: 'VA Task Queue', leaderboard: 'Team Leaderboard', verticals: 'Verticals & Categories', billing: 'Billing & Plan', integrations: 'CRM Integrations', route: 'Route Planning', composer: 'Email Composer' };
   document.getElementById('viewTitle').textContent = titles[view];
   if (view === 'search') renderSearchView();
   if (view === 'contacts') renderContactsView();
@@ -118,6 +118,8 @@ function switchView(view) {
   if (view === 'verticals') renderVerticalsView();
   if (view === 'billing') renderBillingView();
   if (view === 'integrations') renderIntegrationsView();
+  if (view === 'route') renderRouteView();
+  if (view === 'composer') renderComposerView();
 }
 
 // ── SEARCH (start page) ──
@@ -694,6 +696,222 @@ async function checkout(plan) {
   } catch (e) {
     msg.textContent = '⚠ ' + e.message + ' (expected in this demo — add real Stripe keys to go live)';
   }
+}
+
+// ── ROUTE PLANNING (free OpenStreetMap/Leaflet map — no paid API key needed) ──
+let routeLeafletMap = null;
+
+async function renderRouteView() {
+  const content = document.getElementById('content');
+  if (!state.selectedVerticalId) {
+    content.innerHTML = '<div class="empty">Pick a territory in Search or Contacts first, then come back here to plan today\'s route.</div>';
+    return;
+  }
+  content.innerHTML = '<p style="color:var(--mute);font-size:13px">Loading contacts…</p>';
+  const contacts = await api('/contacts?verticalId=' + state.selectedVerticalId);
+  state.routeContacts = contacts;
+  state.routeOrdered = null;
+  renderRouteLayout(contacts, null);
+}
+
+function renderRouteStops(list) {
+  if (!list.length) return '<div class="empty">No contacts with an address yet in this territory.</div>';
+  return list.map((c, i) => `
+    <div class="route-stop">
+      <div class="stop-num">${i + 1}</div>
+      <div style="flex:1">
+        <div class="contact-name">${c.name}</div>
+        <div class="contact-meta">${c.address || 'No address on file'}</div>
+        ${c._legMiles != null ? `<div style="font-size:11px;color:var(--mute);margin-top:3px">+${c._legMiles.toFixed(1)} mi from previous stop</div>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function renderRouteLayout(contacts, ordered) {
+  const content = document.getElementById('content');
+  const v = state.verticals.find(x => x.id === state.selectedVerticalId);
+  const withAddr = contacts.filter(c => c.address);
+  content.innerHTML = `
+    <p style="font-size:13px;color:var(--mute);max-width:720px;margin-top:0">
+      Plan an efficient visiting order for <b>${v ? v.label : 'this territory'}</b>. Distances shown are straight-line
+      estimates — use "Open in Google Maps" for real turn-by-turn driving directions.
+    </p>
+    <div style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn primary" style="width:auto" onclick="optimizeRoute()">Optimize Route (${withAddr.length} stops)</button>
+      ${ordered ? `<button class="btn" style="width:auto" onclick="exportRouteToGoogleMaps()">Open in Google Maps</button>` : ''}
+      <span id="routeMsg" style="font-size:12px;color:var(--mute)"></span>
+    </div>
+    <div class="route-layout">
+      <div class="route-list" id="routeList">${renderRouteStops(ordered || withAddr)}</div>
+      <div class="map-box" id="routeMap"></div>
+    </div>`;
+  initRouteMap(ordered || withAddr);
+}
+
+async function optimizeRoute() {
+  const msg = document.getElementById('routeMsg');
+  const v = state.verticals.find(x => x.id === state.selectedVerticalId);
+  let contacts = state.routeContacts.filter(c => c.address);
+  if (!contacts.length) { msg.textContent = 'No contacts with an address to route.'; return; }
+  msg.textContent = 'Geocoding stops…';
+
+  for (const c of contacts) {
+    if (c.lat != null && c.lng != null) continue;
+    const m = (c.address || '').match(/\b(\d{5})(-\d{4})?\b/);
+    if (!m) continue;
+    const geo = await geocodeZip(m[1]);
+    if (geo) {
+      c.lat = geo.lat; c.lng = geo.lng;
+      api('/contacts/' + c.id, { method: 'PATCH', body: { lat: geo.lat, lng: geo.lng } }).catch(() => {});
+    }
+  }
+  contacts = contacts.filter(c => c.lat != null && c.lng != null);
+  if (!contacts.length) { msg.textContent = 'Could not geocode any addresses — make sure each has a 5-digit zip.'; return; }
+
+  const start = (v && v.targetLat != null) ? { lat: v.targetLat, lng: v.targetLng } : contacts[0];
+  const remaining = contacts.slice();
+  const ordered = [];
+  let cursor = start;
+  while (remaining.length) {
+    let bestIdx = 0, bestDist = Infinity;
+    remaining.forEach((c, i) => {
+      const d = distanceMiles(cursor.lat, cursor.lng, c.lat, c.lng);
+      if (d != null && d < bestDist) { bestDist = d; bestIdx = i; }
+    });
+    const next = remaining.splice(bestIdx, 1)[0];
+    next._legMiles = bestDist;
+    ordered.push(next);
+    cursor = next;
+  }
+  state.routeOrdered = ordered;
+  const total = ordered.reduce((s, c) => s + (c._legMiles || 0), 0);
+  msg.textContent = `Optimized: ${ordered.length} stops, ~${total.toFixed(1)} miles (straight-line estimate).`;
+  renderRouteLayout(state.routeContacts, ordered);
+}
+
+function initRouteMap(stops) {
+  const el = document.getElementById('routeMap');
+  if (!el || typeof L === 'undefined') return;
+  if (routeLeafletMap) { routeLeafletMap.remove(); routeLeafletMap = null; }
+  const geo = stops.filter(c => c.lat != null && c.lng != null);
+  const center = geo.length ? [geo[0].lat, geo[0].lng] : [40.73, -74.0];
+  routeLeafletMap = L.map('routeMap').setView(center, geo.length ? 9 : 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(routeLeafletMap);
+  const latlngs = [];
+  geo.forEach((c, i) => {
+    L.marker([c.lat, c.lng]).addTo(routeLeafletMap).bindPopup(`<b>${i + 1}. ${c.name}</b><br>${c.address || ''}`);
+    latlngs.push([c.lat, c.lng]);
+  });
+  if (latlngs.length > 1) {
+    L.polyline(latlngs, { color: '#1B3A5C', weight: 3, dashArray: '6,6' }).addTo(routeLeafletMap);
+    routeLeafletMap.fitBounds(latlngs, { padding: [30, 30] });
+  } else if (latlngs.length === 1) {
+    routeLeafletMap.setView(latlngs[0], 12);
+  }
+}
+
+function exportRouteToGoogleMaps() {
+  const ordered = state.routeOrdered;
+  if (!ordered || !ordered.length) return;
+  const encode = c => encodeURIComponent(c.address || `${c.lat},${c.lng}`);
+  const origin = encode(ordered[0]);
+  const destination = encode(ordered[ordered.length - 1]);
+  const waypoints = ordered.slice(1, -1).map(encode).join('|');
+  let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+  if (waypoints) url += `&waypoints=${waypoints}`;
+  window.open(url, '_blank');
+}
+
+// ── EMAIL COMPOSER (template-based smart drafts, no external AI key required) ──
+async function renderComposerView() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<p style="color:var(--mute);font-size:13px">Loading contacts…</p>';
+  let contacts = [];
+  if (state.selectedVerticalId) contacts = await api('/contacts?verticalId=' + state.selectedVerticalId);
+  state.composerContacts = contacts;
+  state.composerTone = 'intro';
+  content.innerHTML = `
+    <div class="composer-layout">
+      <div class="composer-panel card">
+        <h3 style="margin-top:0;font-size:14px">1. Choose a contact</h3>
+        <select id="cmp_contact" class="select" style="width:100%">
+          <option value="">${contacts.length ? '— Select a contact —' : 'No contacts in this territory yet'}</option>
+          ${contacts.map(c => `<option value="${c.id}">${c.name}${c.contactName ? ' — ' + c.contactName : ''}</option>`).join('')}
+        </select>
+        <h3 style="font-size:14px;margin-top:18px">2. Pick a tone</h3>
+        <div id="cmp_tones">
+          ${[['intro', 'Intro'], ['followup', 'Follow-up'], ['checkin', 'Check-in'], ['thanks', 'Thank you']].map(([t, l], i) =>
+            `<span class="tone-chip ${i === 0 ? 'active' : ''}" data-tone="${t}" onclick="selectComposerTone('${t}')">${l}</span>`).join('')}
+        </div>
+        <h3 style="font-size:14px;margin-top:18px">3. Your name</h3>
+        <input id="cmp_sender" class="select" style="width:100%" placeholder="Your name" value="${state.user ? state.user.name : ''}" />
+        <button class="btn primary" style="margin-top:16px" onclick="generateComposerEmail()">Generate Draft</button>
+      </div>
+      <div class="composer-output card" id="cmp_output">
+        <div class="empty">Pick a contact and tone, then generate a draft. It pulls in the company name, contact person, and category details automatically.</div>
+      </div>
+    </div>`;
+}
+
+function selectComposerTone(tone) {
+  state.composerTone = tone;
+  document.querySelectorAll('#cmp_tones .tone-chip').forEach(el => el.classList.toggle('active', el.dataset.tone === tone));
+}
+
+function generateComposerEmail() {
+  const contactId = document.getElementById('cmp_contact').value;
+  const senderName = document.getElementById('cmp_sender').value.trim() || 'our team';
+  const out = document.getElementById('cmp_output');
+  if (!contactId) { out.innerHTML = '<div class="empty">Choose a contact first.</div>'; return; }
+  const c = state.composerContacts.find(x => x.id === contactId);
+  const v = state.verticals.find(x => x.id === state.selectedVerticalId);
+  const tone = state.composerTone || 'intro';
+  const firstName = (c.contactName || '').split(' ')[0] || 'there';
+  const context = v && v.emailScript ? v.emailScript : `we work with businesses like ${c.name} in the ${v ? v.label.toLowerCase() : 'industry'} space`;
+
+  const templates = {
+    intro: {
+      subject: `Quick intro — ${c.name}`,
+      body: `Hi ${firstName},\n\nMy name is ${senderName}. ${context}.\n\nI'd love to find 10 minutes this week to introduce ourselves and see if there's a fit for ${c.name}. Would a quick call work sometime this week?\n\nBest,\n${senderName}`,
+    },
+    followup: {
+      subject: `Following up — ${c.name}`,
+      body: `Hi ${firstName},\n\nWanted to follow up on my earlier note — I know things get busy. Are you still the right person to speak with about this at ${c.name}?\n\nHappy to work around your schedule.\n\nBest,\n${senderName}`,
+    },
+    checkin: {
+      subject: `Checking in — ${c.name}`,
+      body: `Hi ${firstName},\n\nIt's been a little while since we last connected. Wanted to check in and see how things are going at ${c.name}, and if there's anything new we can help with.\n\nBest,\n${senderName}`,
+    },
+    thanks: {
+      subject: `Thanks for your time — ${c.name}`,
+      body: `Hi ${firstName},\n\nThank you for taking the time to speak with me. It was great learning more about ${c.name}. I'll follow up with next steps shortly, but feel free to reach out in the meantime.\n\nBest,\n${senderName}`,
+    },
+  };
+  const { subject, body } = templates[tone];
+  const mailto = `mailto:${encodeURIComponent(c.email || '')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  out.innerHTML = `
+    <h3 style="margin-top:0;font-size:14px">Draft for ${c.name}</h3>
+    <label style="font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.3px">Subject</label>
+    <input id="cmp_subject" class="select" style="width:100%;margin-top:4px;margin-bottom:12px" value="${subject.replace(/"/g, '&quot;')}" />
+    <label style="font-size:11px;color:var(--mute);text-transform:uppercase;letter-spacing:.3px">Body</label>
+    <textarea id="cmp_body" class="select" style="width:100%;min-height:220px;margin-top:4px;font-family:inherit;line-height:1.6">${body}</textarea>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn primary" style="width:auto" onclick="copyComposerDraft()">Copy Draft</button>
+      <a class="btn" href="${mailto}">Open in Email App</a>
+    </div>
+    <div id="cmp_copyMsg" style="font-size:12px;color:var(--green);margin-top:8px"></div>`;
+}
+
+function copyComposerDraft() {
+  const subject = document.getElementById('cmp_subject').value;
+  const body = document.getElementById('cmp_body').value;
+  navigator.clipboard.writeText(`Subject: ${subject}\n\n${body}`).then(() => {
+    document.getElementById('cmp_copyMsg').textContent = '✓ Copied to clipboard';
+  }).catch(() => {
+    document.getElementById('cmp_copyMsg').textContent = 'Could not copy automatically — select the text above and copy manually.';
+  });
 }
 
 // ── Init ──
