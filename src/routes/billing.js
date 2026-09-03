@@ -50,6 +50,48 @@ router.post('/checkout', requireAuth, requireRole('owner'), async (req, res) => 
   }
 });
 
+// Sends the Enterprise lead notification via Resend's HTTP API (https://resend.com) — no SDK
+// needed, just a POST with an API key. If RESEND_API_KEY isn't set yet, this silently no-ops
+// and the lead is still logged to the console/DB, so nothing breaks before the key is added.
+async function sendEnterpriseLeadEmail({ tenant, requestedBy, plan, seatsRequested, notes }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const notifyTo = process.env.SALES_NOTIFY_EMAIL || 'ProspectPro@gmail.com';
+  const fromAddress = process.env.SALES_FROM_EMAIL || 'ProspectPro <onboarding@resend.dev>';
+  if (!apiKey) return { sent: false, reason: 'RESEND_API_KEY not configured yet' };
+
+  try {
+    const resp = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: fromAddress,
+        to: [notifyTo],
+        reply_to: requestedBy,
+        subject: `Enterprise lead: ${tenant.name} (${plan}, ${seatsRequested || '?'} seats)`,
+        html: `
+          <p><strong>New Enterprise / Enterprise Key lead from ProspectPro</strong></p>
+          <ul>
+            <li>Company: ${tenant.name}</li>
+            <li>Requested by: ${requestedBy}</li>
+            <li>Plan: ${plan}</li>
+            <li>Seats requested: ${seatsRequested || 'not specified'}</li>
+            <li>Notes: ${notes || '(none)'}</li>
+            <li>Submitted: ${new Date().toISOString()}</li>
+          </ul>`,
+      }),
+    });
+    if (!resp.ok) {
+      const detail = await resp.text();
+      console.error('[ENTERPRISE LEAD] Resend send failed', resp.status, detail);
+      return { sent: false, reason: `Resend API error ${resp.status}` };
+    }
+    return { sent: true };
+  } catch (e) {
+    console.error('[ENTERPRISE LEAD] Resend send threw', e.message);
+    return { sent: false, reason: e.message };
+  }
+}
+
 // POST /api/billing/contact-sales — Enterprise / Enterprise Key leads (sales-assisted, no Stripe Checkout)
 router.post('/contact-sales', requireAuth, requireRole('owner'), async (req, res) => {
   const { plan, seatsRequested, notes } = req.body;
@@ -57,14 +99,18 @@ router.post('/contact-sales', requireAuth, requireRole('owner'), async (req, res
   if (!planConfig || !isSalesAssisted(plan)) return res.status(400).json({ error: 'Not a sales-assisted plan' });
 
   const tenant = await prisma.tenant.findUnique({ where: { id: req.user.tenantId } });
-  // No CRM/mailbox is wired up for lead routing yet — log it so it's at least visible in
-  // Render's logs / captured for now. Swap this for a real notification (email, Slack, CRM
-  // webhook) once one is configured.
+  // Always log it (cheap, reliable audit trail even if email delivery has a hiccup), then also
+  // try to email the sales inbox in real time via Resend.
   console.log('[ENTERPRISE LEAD]', {
     tenantId: tenant.id, tenantName: tenant.name, requestedBy: req.user.email,
     plan, seatsRequested, notes, at: new Date().toISOString(),
   });
-  res.json({ received: true, message: 'Thanks — our team will reach out shortly to set up your Enterprise plan.' });
+  const emailResult = await sendEnterpriseLeadEmail({ tenant, requestedBy: req.user.email, plan, seatsRequested, notes });
+  res.json({
+    received: true,
+    message: 'Thanks — our team will reach out shortly to set up your Enterprise plan.',
+    notified: emailResult.sent, // useful for admin/debug views; harmless to ignore in the UI
+  });
 });
 
 // POST /api/billing/territories/set — buy or remove à la carte extra territory slots on the
