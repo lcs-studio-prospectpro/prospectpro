@@ -90,6 +90,8 @@ module.exports = {
     { key: 'locationId', label: 'Location ID', type: 'text' },
   ],
   helpUrl: 'https://help.gohighlevel.com/support/solutions/articles/155000003054',
+  // Our affiliate referral link — shown to users who don't have a GoHighLevel account yet.
+  signupUrl: 'https://www.gohighlevel.com/?fp_ref=steven-3106b6',
   testConnection,
   pushContact,
   fetchAll,

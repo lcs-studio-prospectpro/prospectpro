@@ -561,6 +561,7 @@ async function renderBillingView() {
       <div class="stat-box"><div class="n">${status.subscriptionStatus}</div><div class="l">Status</div></div>
       ${status.trialDaysLeft !== null ? `<div class="stat-box"><div class="n">${status.trialDaysLeft}</div><div class="l">Trial Days Left</div></div>` : ''}
     </div>
+    <p style="font-size:11px;color:var(--mute);margin-top:12px;max-width:640px">Priced below comparable prospecting/CRM tools (e.g. Close from $19&#8211;49/seat/mo, Apollo from $49/seat/mo, GoHighLevel from $97&#8211;497/mo) while still including bi-directional CRM sync at the Small Business tier.</p>
     <div class="grid" style="display:flex;flex-wrap:wrap;gap:16px;margin-top:14px">${cards}</div>
     <div id="billingMsg" style="margin-top:14px;font-size:12px;color:var(--mute)"></div>
     ${renderLegalContactPanel()}`;
@@ -649,6 +650,7 @@ function showCrmConnectForm(providerKey) {
       </div>
       <div id="crmMsg" style="margin-top:10px;font-size:12px;color:var(--mute)"></div>
       ${provider.helpUrl ? `<p style="font-size:11px;margin-top:8px"><a href="${provider.helpUrl}" target="_blank">Where do I find these?</a></p>` : ''}
+      ${provider.signupUrl ? `<p style="font-size:11px;margin-top:4px">Don't have a ${provider.name} account? <a href="${provider.signupUrl}" target="_blank">Sign up here</a></p>` : ''}
     </div>`;
 }
 

@@ -5,7 +5,7 @@ const PLANS = {
   intro: {
     key: 'intro',
     label: 'Intro',
-    price: 39,
+    price: 19,
     priceId: process.env.STRIPE_PRICE_INTRO,
     seats: 1,
     territories: 1,
@@ -22,7 +22,7 @@ const PLANS = {
   smallbiz: {
     key: 'smallbiz',
     label: 'Small Business',
-    price: 129,
+    price: 79,
     priceId: process.env.STRIPE_PRICE_SMALLBIZ,
     seats: 10,
     territories: 5,
@@ -39,7 +39,7 @@ const PLANS = {
   pro: {
     key: 'pro',
     label: 'Professional',
-    price: 299,
+    price: 199,
     priceId: process.env.STRIPE_PRICE_PRO,
     seats: null, // unlimited
     territories: null, // unlimited
