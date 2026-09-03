@@ -2,6 +2,7 @@ const express = require('express');
 const prisma = require('../lib/prisma');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { effectiveTerritoryLimit, radiusLimit } = require('../lib/plans');
+const { estimatedCountyRadiusMiles } = require('../lib/countySize');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -10,13 +11,28 @@ function slugify(str) {
   return str.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
 
-// Reject a search radius that exceeds the tenant's plan cap. County-based territories (no
-// radiusMiles / zip search involved) are unaffected — this only bounds zip+radius searches.
+// Reject a search radius that exceeds the tenant's plan cap.
 function checkRadiusAllowed(tenant, radiusMiles) {
   if (radiusMiles == null) return null;
   const max = radiusLimit(tenant.plan);
   if (radiusMiles > max) {
     return `Your ${tenant.plan} plan allows up to a ${max}-mile search radius. Choose a smaller radius or upgrade your plan for wider coverage.`;
+  }
+  return null;
+}
+
+// Also bound "search by county" territories against the same per-plan cap — otherwise a
+// Basic-tier account could pick a huge county (e.g. San Bernardino County, CA, an ~80-mile
+// equivalent radius) and get more coverage than an Enterprise zip+radius search. We estimate a
+// county's footprint as the radius of a circle with the same land area (US Census data). If the
+// county name doesn't match our dataset we fail open (don't block) rather than guess wrong.
+function checkCountySizeAllowed(tenant, targetState, targetCounty) {
+  if (!targetCounty) return null;
+  const estRadius = estimatedCountyRadiusMiles(targetState, targetCounty);
+  if (estRadius == null) return null;
+  const max = radiusLimit(tenant.plan);
+  if (estRadius > max) {
+    return `${targetCounty} spans roughly a ${Math.round(estRadius)}-mile radius, which is larger than your ${tenant.plan} plan's ${max}-mile coverage limit. Search by zip + a smaller radius instead, or upgrade your plan for county-wide coverage.`;
   }
   return null;
 }
@@ -44,7 +60,7 @@ router.post('/', requireRole('admin'), async (req, res) => {
       return res.status(403).json({ error: `Your plan includes ${limit} territor${limit === 1 ? 'y' : 'ies'}. Upgrade to add more.` });
     }
   }
-  const radiusError = checkRadiusAllowed(tenant, radiusMiles);
+  const radiusError = checkRadiusAllowed(tenant, radiusMiles) || checkCountySizeAllowed(tenant, targetState, targetCounty);
   if (radiusError) return res.status(403).json({ error: radiusError });
 
   const key = slugify(label);
@@ -82,9 +98,11 @@ router.patch('/:id', requireRole('admin'), async (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Not found' });
   const { label, batchSize, confirmThreshold, color, archived, callScript, emailScript, targetState, targetCity, targetCounty, targetZip, radiusMiles, targetLat, targetLng } = req.body;
 
-  if (radiusMiles != null) {
+  if (radiusMiles != null || targetCounty != null) {
     const tenant = await prisma.tenant.findUnique({ where: { id: req.user.tenantId } });
-    const radiusError = checkRadiusAllowed(tenant, radiusMiles);
+    const effState = targetState !== undefined ? targetState : existing.targetState;
+    const effCounty = targetCounty !== undefined ? targetCounty : existing.targetCounty;
+    const radiusError = checkRadiusAllowed(tenant, radiusMiles) || checkCountySizeAllowed(tenant, effState, effCounty);
     if (radiusError) return res.status(403).json({ error: radiusError });
   }
 
