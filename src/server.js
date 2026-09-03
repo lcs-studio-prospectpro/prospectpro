@@ -11,6 +11,8 @@ const vaTasksRoutes = require('./routes/vaTasks');
 const billingRoutes = require('./routes/billing');
 const reportsRoutes = require('./routes/reports');
 const tenantRoutes = require('./routes/tenant');
+const crmRoutes = require('./routes/crm');
+const { startScheduledSync } = require('./lib/crm/sync');
 
 const app = express();
 
@@ -31,6 +33,7 @@ app.use('/api/va-tasks', vaTasksRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/tenant', tenantRoutes);
+app.use('/api/crm', crmRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -38,4 +41,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`ProspectPro API listening on :${PORT}`));
+app.listen(PORT, () => {
+  console.log(`ProspectPro API listening on :${PORT}`);
+  startScheduledSync(); // every 30 min, syncs all tenants with a connected CRM
+});

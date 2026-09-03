@@ -23,11 +23,12 @@ model Tenant {
   trialEndsAt       DateTime?
   createdAt         DateTime  @default(now())
 
-  users     User[]
-  verticals Vertical[]
-  contacts  Contact[]
-  callLogs  CallLog[]
-  tasks     VaTask[]
+  users         User[]
+  verticals     Vertical[]
+  contacts      Contact[]
+  callLogs      CallLog[]
+  tasks         VaTask[]
+  crmConnection CrmConnection?
 }
 
 // ── USERS (scoped to a tenant, role-based) ──
@@ -106,10 +107,30 @@ model Contact {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // ── CRM sync tracking (one active CRM connection per tenant) ──
+  crmExternalId  String?   // the contact's ID in the connected CRM
+  crmSyncedAt    DateTime? // when we last pushed/pulled this contact successfully
+  crmSyncHash    String?   // hash of last-synced field values, to detect local edits needing a push
+
   callLogs CallLog[]
   tasks    VaTask[]
 
   @@index([tenantId, verticalId])
+}
+
+// ── CRM CONNECTION (bi-directional prospecting <-> CRM sync, one per tenant) ──
+model CrmConnection {
+  id          String    @id @default(cuid())
+  tenantId    String    @unique
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  provider    String    // ghl | hubspot | pipedrive
+  label       String?   // user-facing name, e.g. "GoHighLevel — A I T Marketing"
+  credentials String    // JSON blob: API keys/tokens/location/portal IDs for this provider
+  status      String    @default("connected") // connected | error
+  lastError   String?
+  lastSyncAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 // ── CALL LOG (finally a real durable table — gap identified in the AIT build) ──

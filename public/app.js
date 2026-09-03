@@ -109,7 +109,7 @@ function switchView(view) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));
   document.getElementById('addContactBtn').classList.toggle('hidden', view !== 'contacts');
   document.getElementById('importContactsBtn').classList.toggle('hidden', view !== 'contacts');
-  const titles = { search: 'Search', contacts: 'Contacts', tasks: 'VA Task Queue', leaderboard: 'Team Leaderboard', verticals: 'Verticals & Categories', billing: 'Billing & Plan' };
+  const titles = { search: 'Search', contacts: 'Contacts', tasks: 'VA Task Queue', leaderboard: 'Team Leaderboard', verticals: 'Verticals & Categories', billing: 'Billing & Plan', integrations: 'CRM Integrations' };
   document.getElementById('viewTitle').textContent = titles[view];
   if (view === 'search') renderSearchView();
   if (view === 'contacts') renderContactsView();
@@ -117,6 +117,7 @@ function switchView(view) {
   if (view === 'leaderboard') renderLeaderboardView();
   if (view === 'verticals') renderVerticalsView();
   if (view === 'billing') renderBillingView();
+  if (view === 'integrations') renderIntegrationsView();
 }
 
 // ── SEARCH (start page) ──
@@ -563,6 +564,109 @@ function renderLegalContactPanel() {
         Billing contact: Studio@LCS-Studio.com
       </div>
     </div>`;
+}
+
+// ── INTEGRATIONS (CRM sync) ──
+async function renderIntegrationsView() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<p style="color:var(--mute);font-size:13px">Loading...</p>';
+  const [{ providers, comingSoon }, conn] = await Promise.all([
+    api('/crm/providers'),
+    api('/crm/connection'),
+  ]);
+  state.crmProviders = providers;
+
+  if (conn.connected) {
+    const provider = providers.find(p => p.key === conn.provider);
+    content.innerHTML = `
+      <div class="card" style="max-width:520px">
+        <h3 style="margin-top:0">${provider ? provider.name : conn.provider} — Connected</h3>
+        <div style="font-size:12px;color:var(--mute);line-height:1.8">
+          Status: <b style="color:${conn.status === 'connected' ? '#1a7f37' : '#c0392b'}">${conn.status}</b><br>
+          Last synced: ${conn.lastSyncAt ? new Date(conn.lastSyncAt).toLocaleString() : 'never yet'}<br>
+          ${conn.lastError ? `<span style="color:#c0392b">Last error: ${conn.lastError}</span><br>` : ''}
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn primary" onclick="crmSyncNow()">Sync Now</button>
+          <button class="btn" onclick="crmDisconnect()">Disconnect</button>
+        </div>
+        <div id="crmMsg" style="margin-top:10px;font-size:12px;color:var(--mute)"></div>
+      </div>
+      <p style="font-size:12px;color:var(--mute);margin-top:16px;max-width:520px">
+        Confirmed contacts push to ${provider ? provider.name : 'your CRM'} automatically every 30 minutes,
+        and any edits made in ${provider ? provider.name : 'your CRM'} (e.g. after a call) sync back here too.
+      </p>`;
+    return;
+  }
+
+  const cards = providers.map(p => `
+    <div class="card" style="width:220px">
+      <h3 style="margin-top:0">${p.name}</h3>
+      <button class="btn primary" onclick="showCrmConnectForm('${p.key}')">Connect</button>
+    </div>`).join('');
+  const soonCards = comingSoon.map(p => `
+    <div class="card" style="width:220px;opacity:.55">
+      <h3 style="margin-top:0">${p.name}</h3>
+      <button class="btn" disabled>Coming soon</button>
+    </div>`).join('');
+
+  content.innerHTML = `
+    <p style="font-size:13px;color:var(--mute);max-width:600px">Connect a CRM to automatically push confirmed
+    prospects and pull back call/email outcomes — bi-directional, kept in sync every 30 minutes.</p>
+    <div class="grid" style="display:flex;flex-wrap:wrap;gap:14px;margin-top:12px">${cards}${soonCards}</div>
+    <div id="crmConnectFormWrap" style="margin-top:20px"></div>`;
+}
+
+function showCrmConnectForm(providerKey) {
+  const provider = state.crmProviders.find(p => p.key === providerKey);
+  const wrap = document.getElementById('crmConnectFormWrap');
+  const fieldsHtml = provider.fields.map(f => `
+    <label style="display:block;font-size:12px;margin-top:10px">${f.label}
+      <input type="${f.type}" id="crmField_${f.key}" style="display:block;width:100%;margin-top:4px" />
+    </label>`).join('');
+  wrap.innerHTML = `
+    <div class="card" style="max-width:420px">
+      <h3 style="margin-top:0">Connect ${provider.name}</h3>
+      ${fieldsHtml}
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn primary" onclick="crmConnect('${providerKey}')">Connect</button>
+        <button class="btn" onclick="document.getElementById('crmConnectFormWrap').innerHTML=''">Cancel</button>
+      </div>
+      <div id="crmMsg" style="margin-top:10px;font-size:12px;color:var(--mute)"></div>
+      ${provider.helpUrl ? `<p style="font-size:11px;margin-top:8px"><a href="${provider.helpUrl}" target="_blank">Where do I find these?</a></p>` : ''}
+    </div>`;
+}
+
+async function crmConnect(providerKey) {
+  const provider = state.crmProviders.find(p => p.key === providerKey);
+  const credentials = {};
+  provider.fields.forEach(f => { credentials[f.key] = document.getElementById(`crmField_${f.key}`).value.trim(); });
+  const msg = document.getElementById('crmMsg');
+  msg.textContent = 'Testing connection...';
+  try {
+    await api('/crm/connect', { method: 'POST', body: { provider: providerKey, credentials } });
+    renderIntegrationsView();
+  } catch (e) {
+    msg.textContent = '⚠ ' + e.message;
+  }
+}
+
+async function crmSyncNow() {
+  const msg = document.getElementById('crmMsg');
+  msg.textContent = 'Syncing...';
+  try {
+    const result = await api('/crm/sync', { method: 'POST' });
+    msg.textContent = `Synced: ${result.pushed} pushed, ${result.pulled} pulled.${result.errors && result.errors.length ? ' (' + result.errors.length + ' error(s), see console)' : ''}`;
+    if (result.errors && result.errors.length) console.warn(result.errors);
+  } catch (e) {
+    msg.textContent = '⚠ ' + e.message;
+  }
+}
+
+async function crmDisconnect() {
+  if (!confirm('Disconnect this CRM? Contacts already synced will keep their sync history.')) return;
+  await api('/crm/disconnect', { method: 'POST' });
+  renderIntegrationsView();
 }
 
 async function checkout(plan) {
