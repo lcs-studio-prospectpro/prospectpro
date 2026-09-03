@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
 
 // POST /api/verticals — add a brand-new vertical/category (e.g. a rep expanding into a new field)
 router.post('/', requireRole('admin'), async (req, res) => {
-  const { label, categoryCode, batchSize, confirmThreshold, color, callScript, emailScript, targetState, targetCity, targetZip, radiusMiles, targetLat, targetLng } = req.body;
+  const { label, categoryCode, batchSize, confirmThreshold, color, callScript, emailScript, targetState, targetCity, targetCounty, targetZip, radiusMiles, targetLat, targetLng } = req.body;
   if (!label || !categoryCode) return res.status(400).json({ error: 'label and categoryCode are required' });
 
   const tenant = await prisma.tenant.findUnique({ where: { id: req.user.tenantId } });
@@ -49,6 +49,7 @@ router.post('/', requireRole('admin'), async (req, res) => {
         emailScript: emailScript || null,
         targetState: targetState || null,
         targetCity: targetCity || null,
+        targetCounty: targetCounty || null,
         targetZip: targetZip || null,
         radiusMiles: radiusMiles || 25,
         targetLat: targetLat || null,
@@ -66,10 +67,10 @@ router.post('/', requireRole('admin'), async (req, res) => {
 router.patch('/:id', requireRole('admin'), async (req, res) => {
   const existing = await prisma.vertical.findFirst({ where: { id: req.params.id, tenantId: req.user.tenantId } });
   if (!existing) return res.status(404).json({ error: 'Not found' });
-  const { label, batchSize, confirmThreshold, color, archived, callScript, emailScript, targetState, targetCity, targetZip, radiusMiles, targetLat, targetLng } = req.body;
+  const { label, batchSize, confirmThreshold, color, archived, callScript, emailScript, targetState, targetCity, targetCounty, targetZip, radiusMiles, targetLat, targetLng } = req.body;
   const vertical = await prisma.vertical.update({
     where: { id: existing.id },
-    data: { label, batchSize, confirmThreshold, color, archived, callScript, emailScript, targetState, targetCity, targetZip, radiusMiles, targetLat, targetLng },
+    data: { label, batchSize, confirmThreshold, color, archived, callScript, emailScript, targetState, targetCity, targetCounty, targetZip, radiusMiles, targetLat, targetLng },
   });
   res.json(vertical);
 });

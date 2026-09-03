@@ -3,3 +3,7 @@ dev.db
 server.log
 .env
 OWNERSHIP.md
+
+# Electron desktop build output (built via CI, not committed)
+electron-app/node_modules/
+electron-app/dist/

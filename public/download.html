@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProspectPro Desktop — Download</title>
+<style>
+  :root{
+    --navy:#1B3A5C; --navy-dark:#0f2338; --gold:#d4af37;
+    --bg:#f6f8fa; --border:#e5e9ee; --text:#1c2530; --mute:#68758a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text)}
+  header{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-dark) 100%);color:#fff;padding:56px 24px;text-align:center}
+  header .logo{font-weight:800;font-size:20px;margin-bottom:18px}
+  header .logo span{color:var(--gold)}
+  header h1{font-size:32px;margin:0 0 12px;letter-spacing:-.5px}
+  header p{font-size:15px;color:#c7d5e5;max-width:520px;margin:0 auto}
+  .wrap{max-width:760px;margin:-32px auto 60px;padding:0 20px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:28px;box-shadow:0 10px 30px rgba(16,24,40,.08);margin-bottom:20px}
+  .price-row{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+  .price{font-size:30px;font-weight:800;color:var(--navy)}
+  .price-sub{color:var(--mute);font-size:13px}
+  ul.features{padding-left:20px;color:var(--mute);font-size:14px;line-height:1.9;margin:16px 0}
+  .downloads{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}
+  .dl-btn{flex:1;min-width:220px;display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:10px;padding:16px;text-decoration:none;color:var(--text);transition:box-shadow .15s,border-color .15s}
+  .dl-btn:hover{box-shadow:0 4px 14px rgba(16,24,40,.08);border-color:var(--navy)}
+  .dl-btn .plat{font-weight:700;font-size:14px}
+  .dl-btn .sub{font-size:11.5px;color:var(--mute)}
+  .note{background:#fef6e7;border:1px solid #f0d999;color:#8a5f10;padding:12px 15px;border-radius:10px;font-size:13px;margin-top:18px;line-height:1.6}
+  .steps{counter-reset:step;list-style:none;padding:0;margin:0}
+  .steps li{counter-increment:step;padding-left:34px;position:relative;margin-bottom:14px;font-size:14px;color:var(--text);line-height:1.6}
+  .steps li::before{content:counter(step);position:absolute;left:0;top:0;width:22px;height:22px;background:var(--navy);color:#fff;border-radius:50%;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  a.cta{color:var(--navy);font-weight:600}
+  footer{text-align:center;padding:24px;font-size:12px;color:var(--mute)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Prospect<span>Pro</span></div>
+  <h1>ProspectPro Desktop</h1>
+  <p>One rep, one region. A native desktop app for solo reps who just need a single defined territory — no team setup required.</p>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <div class="price-row"><span class="price">$12</span><span class="price-sub">/ month · 1 license per download</span></div>
+    <div class="price-sub">Cheapest way to run ProspectPro — for one person covering one county or zip-code region.</div>
+    <ul class="features">
+      <li>Native Windows &amp; Mac desktop app</li>
+      <li>Set your region once by <b>county or zip code</b> — no multi-territory setup</li>
+      <li>Search, confirm &amp; call workflow</li>
+      <li>Call logging &amp; follow-ups</li>
+      <li>CSV import/export</li>
+    </ul>
+
+    <div class="downloads">
+      <a class="dl-btn" href="https://github.com/lcs-studio-prospectpro/prospectpro/releases/latest/download/ProspectPro-Setup.exe">
+        <span>🪟</span>
+        <span><div class="plat">Download for Windows</div><div class="sub">.exe installer</div></span>
+      </a>
+      <a class="dl-btn" href="https://github.com/lcs-studio-prospectpro/prospectpro/releases/latest/download/ProspectPro-Setup.dmg">
+        <span>🍎</span>
+        <span><div class="plat">Download for Mac</div><div class="sub">.dmg installer</div></span>
+      </a>
+    </div>
+
+    <div class="note">Windows &amp; Mac installers are built automatically from source on every release. If a download link 404s, a fresh build may still be running — check back shortly, or <a class="cta" href="mailto:prospectpro@lcs-studio.com">email us</a> and we'll get you a copy directly.</div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Getting started</h3>
+    <ol class="steps">
+      <li>Don't have a ProspectPro account yet? <a class="cta" href="/">Create one free — 14-day trial</a>, or sign in with your existing account inside the desktop app.</li>
+      <li>Install and open ProspectPro Desktop.</li>
+      <li>Sign in, then go to <b>Search</b> and set your one region by <b>county or zip code</b> — that becomes your permanent desktop territory.</li>
+      <li>Start searching, confirming, and logging calls — all synced to your ProspectPro account.</li>
+    </ol>
+  </div>
+</div>
+
+<footer>
+  ProspectPro is operated by Lighting + Controls Solutions LLC. <a href="/privacy.html">Privacy Policy</a> · <a href="/terms.html">Terms of Service</a>
+</footer>
+
+</body>
+</html>

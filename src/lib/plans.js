@@ -2,6 +2,24 @@
 // GoHighLevel (Starter/Unlimited/Agency Pro), Close, and Apollo: cheapest tier caps seats
 // and locks integrations; the top tier removes caps and unlocks the full toolset.
 const PLANS = {
+  desktop: {
+    key: 'desktop',
+    label: 'Desktop',
+    price: 12,
+    priceId: process.env.STRIPE_PRICE_DESKTOP,
+    seats: 1,
+    territories: 1,
+    crmSync: false,
+    isDesktop: true, // downloadable single-license desktop app, not the multi-user cloud dashboard
+    tagline: 'One rep, one region. Download the desktop app and go — no team setup required.',
+    features: [
+      'Windows & Mac desktop app (1 license per download)',
+      'Set your region once by county or zip code',
+      'Search, confirm & call workflow',
+      'Call logging & follow-ups',
+      'CSV import/export',
+    ],
+  },
   intro: {
     key: 'intro',
     label: 'Intro',
@@ -56,7 +74,7 @@ const PLANS = {
 };
 
 // Plans a tenant can self-serve upgrade/downgrade into via Stripe Checkout.
-const ORDER = ['trial', 'intro', 'smallbiz', 'pro'];
+const ORDER = ['trial', 'desktop', 'intro', 'smallbiz', 'pro'];
 
 function getPlan(planKey) {
   return PLANS[planKey] || null;

@@ -169,7 +169,15 @@ function renderSearchView() {
           ${US_STATES.map(s => `<option value="${s}" ${v?.targetState === s ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
       </div>
-      <div class="field"><label>City</label><input id="s_city" placeholder="e.g. Tampa" value="${v?.targetCity || ''}"></div>
+      <div class="field">
+        <label>Search region by</label>
+        <div id="s_regionMode">
+          <span class="tone-chip ${state.searchRegionMode !== 'county' ? 'active' : ''}" data-mode="city" onclick="setRegionMode('city')">City</span>
+          <span class="tone-chip ${state.searchRegionMode === 'county' ? 'active' : ''}" data-mode="county" onclick="setRegionMode('county')">County</span>
+        </div>
+      </div>
+      <div class="field ${state.searchRegionMode === 'county' ? 'hidden' : ''}" id="s_city_wrap"><label>City</label><input id="s_city" placeholder="e.g. Tampa" value="${v?.targetCity || ''}"></div>
+      <div class="field ${state.searchRegionMode === 'county' ? '' : 'hidden'}" id="s_county_wrap"><label>County</label><input id="s_county" placeholder="e.g. Suffolk County" value="${v?.targetCounty || ''}"></div>
       <div class="field"><label>Zip code</label><input id="s_zip" placeholder="e.g. 33602" value="${v?.targetZip || ''}"></div>
       <div class="field">
         <label>Search radius</label>
@@ -186,18 +194,27 @@ function renderSearchView() {
   });
 }
 
+function setRegionMode(mode) {
+  state.searchRegionMode = mode;
+  document.querySelectorAll('#s_regionMode .tone-chip').forEach(el => el.classList.toggle('active', el.dataset.mode === mode));
+  document.getElementById('s_city_wrap').classList.toggle('hidden', mode === 'county');
+  document.getElementById('s_county_wrap').classList.toggle('hidden', mode !== 'county');
+}
+
 async function runSearch() {
   const errEl = document.getElementById('s_error');
   errEl.classList.add('hidden');
 
   const vertSel = document.getElementById('s_vertical').value;
   const state_ = document.getElementById('s_state').value;
-  const city = document.getElementById('s_city').value.trim();
+  const regionMode = state.searchRegionMode === 'county' ? 'county' : 'city';
+  const city = regionMode === 'city' ? document.getElementById('s_city').value.trim() : '';
+  const county = regionMode === 'county' ? document.getElementById('s_county').value.trim() : '';
   const zip = document.getElementById('s_zip').value.trim();
   const radiusMiles = parseInt(document.getElementById('s_radius').value);
 
-  if (!vertSel || !state_ || !city || !zip) {
-    errEl.textContent = 'Category, state, city, and zip are all required to search.';
+  if (!vertSel || !state_ || !zip || (regionMode === 'city' ? !city : !county)) {
+    errEl.textContent = `Category, state, zip, and ${regionMode} are all required to search.`;
     errEl.classList.remove('hidden');
     return;
   }
@@ -216,7 +233,7 @@ async function runSearch() {
     await api('/verticals/' + verticalId, {
       method: 'PATCH',
       body: {
-        targetState: state_, targetCity: city, targetZip: zip, radiusMiles,
+        targetState: state_, targetCity: city || null, targetCounty: county || null, targetZip: zip, radiusMiles,
         targetLat: geo?.lat ?? null, targetLng: geo?.lng ?? null,
       },
     });
@@ -234,8 +251,9 @@ async function runSearch() {
 async function renderContactsView() {
   const content = document.getElementById('content');
   const v = state.verticals.find(v => v.id === state.selectedVerticalId);
+  const regionLabel = v && v.targetCounty ? v.targetCounty : (v ? v.targetCity : '');
   const searchBanner = v && v.targetState
-    ? `<div class="banner">🔍 Active territory: <b>${v.label}</b> in ${v.targetCity}, ${v.targetState} ${v.targetZip} · ${v.radiusMiles} mile radius
+    ? `<div class="banner">🔍 Active territory: <b>${v.label}</b> in ${regionLabel}, ${v.targetState} ${v.targetZip} · ${v.radiusMiles} mile radius
         <span class="btn link" style="padding:0 0 0 8px" onclick="switchView('search')">Edit search</span></div>`
     : `<div class="banner">No search territory set for this category yet. <span class="btn link" style="padding:0 0 0 4px" onclick="switchView('search')">Set one up</span></div>`;
   content.innerHTML = `
@@ -553,7 +571,9 @@ async function renderBillingView() {
       </ul>
       ${isCurrent
         ? `<button class="btn" disabled>Current Plan</button>`
-        : `<button class="btn primary" onclick="checkout('${p.key}')">${p.key === 'intro' ? 'Choose' : 'Upgrade to'} ${p.label}</button>`}
+        : p.isDesktop
+          ? `<button class="btn primary" onclick="window.open('/download.html','_blank')">Download Desktop App</button>`
+          : `<button class="btn primary" onclick="checkout('${p.key}')">${p.key === 'intro' ? 'Choose' : 'Upgrade to'} ${p.label}</button>`}
     </div>`;
   }).join('');
 
