@@ -2,18 +2,19 @@ const express = require('express');
 const Stripe = require('stripe');
 const prisma = require('../lib/prisma');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { PLANS } = require('../lib/plans');
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-const PLANS = {
-  starter: { priceId: process.env.STRIPE_PRICE_STARTER, label: 'Starter', seats: 3, price: 29 },
-  pro: { priceId: process.env.STRIPE_PRICE_PRO, label: 'Pro', seats: 15, price: 99 },
-};
+// GET /api/billing/plans — public plan ladder for the pricing/upgrade UI
+router.get('/plans', (req, res) => {
+  res.json(Object.values(PLANS));
+});
 
 // POST /api/billing/checkout — owner starts a Stripe Checkout session to upgrade off the trial
 router.post('/checkout', requireAuth, requireRole('owner'), async (req, res) => {
-  const { plan } = req.body; // 'starter' | 'pro'
+  const { plan } = req.body; // 'intro' | 'smallbiz' | 'pro'
   const planConfig = PLANS[plan];
   if (!planConfig) return res.status(400).json({ error: 'Unknown plan' });
 

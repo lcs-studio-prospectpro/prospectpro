@@ -3,6 +3,7 @@ const prisma = require('../lib/prisma');
 const { requireAuth } = require('../middleware/auth');
 const { ADAPTERS, PROVIDERS, COMING_SOON } = require('../lib/crm');
 const { syncTenant } = require('../lib/crm/sync');
+const { crmSyncAllowed } = require('../lib/plans');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -28,6 +29,10 @@ router.get('/connection', async (req, res) => {
 
 // POST /api/crm/connect  { provider, credentials }
 router.post('/connect', async (req, res) => {
+  const tenant = await prisma.tenant.findUnique({ where: { id: req.user.tenantId } });
+  if (!crmSyncAllowed(tenant.plan)) {
+    return res.status(403).json({ error: 'CRM sync is available on the Small Business plan and above. Upgrade to connect a CRM.' });
+  }
   const { provider, credentials } = req.body;
   const adapter = ADAPTERS[provider];
   if (!adapter) return res.status(400).json({ error: 'Unsupported CRM provider' });

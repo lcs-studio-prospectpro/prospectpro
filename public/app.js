@@ -534,19 +534,34 @@ async function editScript(verticalId) {
 // ── BILLING VIEW ──
 async function renderBillingView() {
   const content = document.getElementById('content');
-  const status = await api('/billing/status');
+  const [status, plans] = await Promise.all([api('/billing/status'), api('/billing/plans')]);
+  const cards = plans.map(p => {
+    const isCurrent = status.plan === p.key;
+    const seats = p.seats === null ? 'Unlimited seats' : `Up to ${p.seats} seat${p.seats > 1 ? 's' : ''}`;
+    const territories = p.territories === null ? 'Unlimited territories' : `Up to ${p.territories} territor${p.territories > 1 ? 'ies' : 'y'}`;
+    return `
+    <div class="card" style="width:250px;display:flex;flex-direction:column;${isCurrent ? 'border:2px solid var(--gold)' : ''}">
+      <h3 style="margin-top:0">${p.label}</h3>
+      <div style="font-size:22px;font-weight:800">$${p.price}<span style="font-size:12px;font-weight:400;color:var(--mute)">/mo</span></div>
+      <p style="font-size:12px;color:var(--mute);min-height:32px">${p.tagline}</p>
+      <ul style="font-size:12px;color:var(--mute);padding-left:18px;flex:1">
+        <li>${seats}</li>
+        <li>${territories}</li>
+        ${p.features.slice(2).map(f => `<li>${f}</li>`).join('')}
+      </ul>
+      ${isCurrent
+        ? `<button class="btn" disabled>Current Plan</button>`
+        : `<button class="btn primary" onclick="checkout('${p.key}')">${p.key === 'intro' ? 'Choose' : 'Upgrade to'} ${p.label}</button>`}
+    </div>`;
+  }).join('');
+
   content.innerHTML = `
     <div class="stat-row">
       <div class="stat-box"><div class="n">${status.plan}</div><div class="l">Current Plan</div></div>
       <div class="stat-box"><div class="n">${status.subscriptionStatus}</div><div class="l">Status</div></div>
       ${status.trialDaysLeft !== null ? `<div class="stat-box"><div class="n">${status.trialDaysLeft}</div><div class="l">Trial Days Left</div></div>` : ''}
     </div>
-    <div class="grid">
-      <div class="card"><h3>Starter — $29/mo</h3><p style="font-size:12px;color:var(--mute)">3 seats, 1 territory, core features</p>
-        <button class="btn primary" onclick="checkout('starter')">Upgrade to Starter</button></div>
-      <div class="card"><h3>Pro — $99/mo</h3><p style="font-size:12px;color:var(--mute)">15 seats, unlimited territories, CRM sync</p>
-        <button class="btn primary" onclick="checkout('pro')">Upgrade to Pro</button></div>
-    </div>
+    <div class="grid" style="display:flex;flex-wrap:wrap;gap:16px;margin-top:14px">${cards}</div>
     <div id="billingMsg" style="margin-top:14px;font-size:12px;color:var(--mute)"></div>
     ${renderLegalContactPanel()}`;
 }

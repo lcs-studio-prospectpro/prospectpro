@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { territoryLimit } = require('../lib/plans');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -23,6 +24,16 @@ router.get('/', async (req, res) => {
 router.post('/', requireRole('admin'), async (req, res) => {
   const { label, categoryCode, batchSize, confirmThreshold, color, callScript, emailScript, targetState, targetCity, targetZip, radiusMiles, targetLat, targetLng } = req.body;
   if (!label || !categoryCode) return res.status(400).json({ error: 'label and categoryCode are required' });
+
+  const tenant = await prisma.tenant.findUnique({ where: { id: req.user.tenantId } });
+  const limit = territoryLimit(tenant.plan);
+  if (limit !== null) {
+    const count = await prisma.vertical.count({ where: { tenantId: req.user.tenantId } });
+    if (count >= limit) {
+      return res.status(403).json({ error: `Your plan includes ${limit} territor${limit === 1 ? 'y' : 'ies'}. Upgrade to add more.` });
+    }
+  }
+
   const key = slugify(label);
   try {
     const vertical = await prisma.vertical.create({

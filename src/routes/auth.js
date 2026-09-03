@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
+const { seatLimit } = require('../lib/plans');
 
 const router = express.Router();
 
@@ -83,6 +84,14 @@ router.post('/invite', async (req, res) => {
   const { tenantId, name, email, password, role } = req.body;
   if (!['admin', 'rep', 'va'].includes(role)) {
     return res.status(400).json({ error: 'role must be admin, rep, or va' });
+  }
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  const limit = seatLimit(tenant.plan);
+  if (limit !== null) {
+    const seatCount = await prisma.user.count({ where: { tenantId } });
+    if (seatCount >= limit) {
+      return res.status(403).json({ error: `Your plan includes ${limit} seat(s). Upgrade to add more team members.` });
+    }
   }
   const passwordHash = await bcrypt.hash(password, 10);
   const vaCode = email.split('@')[0].toUpperCase();

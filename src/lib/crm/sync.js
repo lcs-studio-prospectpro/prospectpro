@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const prisma = require('../prisma');
 const { ADAPTERS } = require('./index');
+const { crmSyncAllowed } = require('../plans');
 
 function hashContact(contact) {
   return crypto.createHash('sha1').update(JSON.stringify({
@@ -13,6 +14,11 @@ function hashContact(contact) {
 async function syncTenant(tenantId) {
   const conn = await prisma.crmConnection.findUnique({ where: { tenantId } });
   if (!conn) return { ok: false, error: 'No CRM connected' };
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant || !crmSyncAllowed(tenant.plan)) {
+    await prisma.crmConnection.update({ where: { tenantId }, data: { status: 'error', lastError: 'Plan downgraded — CRM sync paused. Upgrade to resume.' } });
+    return { ok: false, error: 'CRM sync not included on current plan' };
+  }
   const adapter = ADAPTERS[conn.provider];
   if (!adapter) return { ok: false, error: `Unknown provider: ${conn.provider}` };
   const creds = JSON.parse(conn.credentials);
