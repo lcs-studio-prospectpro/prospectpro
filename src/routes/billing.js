@@ -2,7 +2,7 @@ const express = require('express');
 const Stripe = require('stripe');
 const prisma = require('../lib/prisma');
 const { requireAuth, requireRole } = require('../middleware/auth');
-const { PLANS, isSalesAssisted, territoryAddOnConfig, effectiveTerritoryLimit, territoryLimit } = require('../lib/plans');
+const { PLANS, isSalesAssisted, territoryAddOnConfig, effectiveTerritoryLimit, territoryLimit, radiusLimit } = require('../lib/plans');
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -139,6 +139,7 @@ router.get('/status', requireAuth, async (req, res) => {
     extraTerritories: tenant.extraTerritories || 0,
     effectiveTerritoryLimit: effectiveTerritoryLimit(tenant),
     territoryAddOn: addOnConfig, // null if this plan doesn't support add-ons (unlimited / sales-assisted / trial)
+    maxRadiusMiles: radiusLimit(tenant.plan), // caps zip+radius search; county-based territories are unaffected
   });
 });
 

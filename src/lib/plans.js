@@ -18,6 +18,7 @@ const PLANS = {
     priceId: process.env.STRIPE_PRICE_INTRO,
     seats: 1,
     territories: 1,
+    maxRadiusMiles: 25,
     crmSync: false,
     productLine: 'cloud',
     tagline: 'Solo reps getting started with a defined territory.',
@@ -37,6 +38,7 @@ const PLANS = {
     priceId: process.env.STRIPE_PRICE_SMALLBIZ,
     seats: 10,
     territories: 5,
+    maxRadiusMiles: 50,
     crmSync: true,
     productLine: 'cloud',
     tagline: 'Small teams with VAs running multiple territories.',
@@ -56,6 +58,7 @@ const PLANS = {
     priceId: process.env.STRIPE_PRICE_PRO,
     seats: 25, // capped (was unlimited) so Enterprise has room to sit above it
     territories: null, // unlimited
+    maxRadiusMiles: 100,
     crmSync: true,
     productLine: 'cloud',
     tagline: 'Growing sales orgs running multi-region deployments.',
@@ -78,6 +81,7 @@ const PLANS = {
     salesAssisted: true,
     seats: 50,
     territories: null,
+    maxRadiusMiles: 150,
     crmSync: true,
     productLine: 'cloud',
     tagline: 'Organizations with 30–50 users needing admin controls and dedicated support.',
@@ -101,6 +105,7 @@ const PLANS = {
     salesAssisted: true,
     seats: 100,
     territories: null,
+    maxRadiusMiles: 150,
     crmSync: true,
     productLine: 'cloud',
     usesRegistrationKeys: true,
@@ -122,6 +127,7 @@ const PLANS = {
     priceId: process.env.STRIPE_PRICE_DESKTOP_BASIC || process.env.STRIPE_PRICE_DESKTOP,
     seats: 1,
     territories: 1,
+    maxRadiusMiles: 25,
     crmSync: false,
     productLine: 'desktop',
     isDesktop: true,
@@ -142,6 +148,7 @@ const PLANS = {
     priceId: process.env.STRIPE_PRICE_DESKTOP_PLUS,
     seats: 1,
     territories: 3,
+    maxRadiusMiles: 50,
     crmSync: true,
     productLine: 'desktop',
     isDesktop: true,
@@ -161,6 +168,7 @@ const PLANS = {
     priceId: process.env.STRIPE_PRICE_DESKTOP_PRO,
     seats: 1,
     territories: 10,
+    maxRadiusMiles: 100,
     crmSync: true,
     productLine: 'desktop',
     isDesktop: true,
@@ -182,6 +190,7 @@ const PLANS = {
     priceId: process.env.STRIPE_PRICE_MOBILE_BASIC,
     seats: 1,
     territories: 1,
+    maxRadiusMiles: 25,
     crmSync: false,
     productLine: 'mobile',
     isMobile: true,
@@ -201,6 +210,7 @@ const PLANS = {
     priceId: process.env.STRIPE_PRICE_MOBILE_PLUS,
     seats: 1,
     territories: 3,
+    maxRadiusMiles: 50,
     crmSync: true,
     productLine: 'mobile',
     isMobile: true,
@@ -220,6 +230,7 @@ const PLANS = {
     priceId: process.env.STRIPE_PRICE_MOBILE_PRO,
     seats: 1,
     territories: 10,
+    maxRadiusMiles: 100,
     crmSync: true,
     productLine: 'mobile',
     isMobile: true,
@@ -267,6 +278,16 @@ function territoryLimit(planKey) {
   if (planKey === 'trial') return 1;
   const plan = getPlan(planKey);
   return plan ? plan.territories : 1;
+}
+
+// Max search-radius (miles) allowed per territory, scaled by tier — keeps a "territory" a
+// bounded, meaningfully local unit of coverage rather than letting a Basic-tier account search
+// a 500-mile radius. County-based territories are unaffected by this (radius only applies to
+// zip+radius search mode).
+function radiusLimit(planKey) {
+  if (planKey === 'trial') return 25;
+  const plan = getPlan(planKey);
+  return plan ? (plan.maxRadiusMiles || 25) : 25;
 }
 
 function crmSyncAllowed(planKey) {
@@ -322,6 +343,7 @@ module.exports = {
   seatLimit,
   effectiveSeatLimit,
   territoryLimit,
+  radiusLimit,
   territoryAddOnConfig,
   effectiveTerritoryLimit,
   crmSyncAllowed,

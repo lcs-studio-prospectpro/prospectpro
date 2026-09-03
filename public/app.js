@@ -90,6 +90,7 @@ async function boot() {
 async function loadBillingStatus() {
   try {
     const status = await api('/billing/status');
+    state.billingStatus = status;
     if (status.subscriptionStatus === 'trialing') {
       const pill = document.getElementById('trialPill');
       pill.textContent = `Trial · ${status.trialDaysLeft}d left`;
@@ -148,6 +149,7 @@ async function geocodeZip(zip) {
 function renderSearchView() {
   const content = document.getElementById('content');
   const v = state.verticals.find(v => v.id === state.selectedVerticalId);
+  const maxRadius = state.billingStatus?.maxRadiusMiles || 25;
   content.innerHTML = `
     <div class="banner">Start here every time you begin prospecting: pick the category of business you're targeting and the region to search. This becomes your active territory in Contacts.</div>
     <div class="card" style="max-width:520px">
@@ -182,8 +184,9 @@ function renderSearchView() {
       <div class="field">
         <label>Search radius</label>
         <select id="s_radius" class="select" style="width:100%">
-          ${RADIUS_OPTIONS.map(r => `<option value="${r}" ${(v?.radiusMiles || 25) === r ? 'selected' : ''}>${r} mile radius</option>`).join('')}
+          ${RADIUS_OPTIONS.map(r => `<option value="${r}" ${r > maxRadius ? 'disabled' : ''} ${(v?.radiusMiles || 25) === r && r <= maxRadius ? 'selected' : ''}>${r} mile radius${r > maxRadius ? ' — upgrade required' : ''}</option>`).join('')}
         </select>
+        <div style="font-size:11px;color:var(--mute);margin-top:4px">Your ${state.billingStatus?.plan || 'current'} plan allows up to a ${maxRadius}-mile radius per territory. <a href="#" onclick="switchView('billing');return false;">Upgrade for wider coverage</a>.</div>
       </div>
       <div id="s_error" class="auth-error hidden"></div>
       <button class="btn primary" onclick="runSearch()">🔍 Search This Territory</button>
