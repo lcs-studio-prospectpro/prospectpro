@@ -110,12 +110,20 @@
       <div class="field"><label>Your name</label><input id="su_name" placeholder="Dana Reyes"></div>
       <div class="field"><label>Work email</label><input id="su_email" type="email" placeholder="dana@brightpath.com"></div>
       <div class="field"><label>Password</label><input id="su_password" type="password" placeholder="Min 8 characters"></div>
+      <div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:14px">
+        <input type="checkbox" id="su_agree" style="margin-top:3px">
+        <label for="su_agree" style="font-size:11px;color:var(--mute);line-height:1.5">
+          I agree to the <a href="/terms.html" target="_blank">Terms of Service</a> and
+          <a href="/privacy.html" target="_blank">Privacy Policy</a>, including how my data and my contacts' data are used.
+        </label>
+      </div>
       <button class="btn primary" onclick="signup()">Start 14-day free trial</button>
       <div class="auth-toggle">Already have an account? <span class="btn link" onclick="showLogin()">Sign in</span></div>
       <div class="auth-trial">No credit card required — full features for 14 days</div>
     </div>
     <div style="text-align:center;margin-top:18px;font-size:11px;color:var(--mute)">
-      Questions? <a href="mailto:prospectprosupport@gmail.com" style="color:var(--mute)">prospectprosupport@gmail.com</a>
+      Questions? <a href="mailto:prospectprosupport@gmail.com" style="color:var(--mute)">prospectprosupport@gmail.com</a><br>
+      <a href="/privacy.html" target="_blank" style="color:var(--mute)">Privacy Policy</a> · <a href="/terms.html" target="_blank" style="color:var(--mute)">Terms of Service</a>
     </div>
   </div>
 </div>
@@ -136,7 +144,8 @@
     <div class="nav-item" data-view="billing" onclick="switchView('billing')">💳 Billing</div>
     <div class="sidebar-footer">
       <span id="userName"></span> · <span id="userRole"></span><br>
-      <span class="btn link" style="color:#9fb3c8;padding:0" onclick="logout()">Sign out</span>
+      <span class="btn link" style="color:#9fb3c8;padding:0" onclick="logout()">Sign out</span><br>
+      <a href="/privacy.html" target="_blank" style="color:#9fb3c8">Privacy</a> · <a href="/terms.html" target="_blank" style="color:#9fb3c8">Terms</a>
     </div>
   </div>
 

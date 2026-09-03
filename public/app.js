@@ -41,7 +41,9 @@ async function signup() {
   const name = document.getElementById('su_name').value.trim();
   const email = document.getElementById('su_email').value.trim();
   const password = document.getElementById('su_password').value;
+  const agreed = document.getElementById('su_agree').checked;
   if (!companyName || !name || !email || !password) return authError('All fields are required.');
+  if (!agreed) return authError('Please agree to the Terms of Service and Privacy Policy to continue.');
   try {
     const data = await api('/auth/signup', { method: 'POST', body: { companyName, name, email, password } });
     onAuthed(data);
